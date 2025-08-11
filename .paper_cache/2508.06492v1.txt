@@ -1,0 +1,1466 @@
+Effective Training Data Synthesis for Improving MLLM Chart Understanding
+Yuwei Yang1, Zeyu Zhang1, Yunzhong Hou1, Zhuowan Li4, Gaowen Liu3, Ali Payani3,
+Yuan-Sen Ting2, Liang Zheng1
+1Australian National University
+2Ohio State University
+3Cisco
+4Johns Hopkins University
+{yuwei.yang, zeyu.zhang, yunzhong.hou, liang.zheng}@anu.edu.au
+ting.74@osu.edu
+{gaowen.liu, ali.payani}@cisco.com
+zli110@jhu.edu
+10k+ images
+180k+ descriptive QA pairs
+Q: What is the title of the left subplot?
+A: The title of the left subplot is 'Trends in News Consumption Across Mediums’.
+130k+ reasoning QA pairs
+Q: Which revenue source shows the largest difference between Local Media and National Media?
+A: The differences for each source are: Newspaper Ad Revenue = 380 - 320 = 60M, Digital Ad
+Revenue = 500 - 200 = 300M, Subscription Revenue = 150 - 100 = 50M, Donation Revenue = 25 -
+50 = -25M. Largest difference is for Digital Ad Revenue with 300M. Answer: Digital Ad Revenue.
+Figure 1. Overview of the effective chart dataset (ECD). The QA-referenced chart has been adjusted for readability. The ECD is composed
+of chart images and question-answer (QA) pairs and is intended as a training set for chart understanding. It includes 29 chart types and
+over 250 subplot combinations, offering more than 10k images and 300k QA pairs with high quality.
+Abstract
+Being able to effectively read scientific plots, or chart
+understanding, is a central part toward building effective
+agents for science. However, existing multimodal large lan-
+guage models (MLLMs), especially open-source ones, are
+still falling behind with a typical success rate of 30%-50%
+on challenging benchmarks. Previous studies on fine-tuning
+MLLMs with synthetic charts are often restricted by their
+inadequate similarity to the real charts, which could com-
+*This work was supported in part by the Australian Research
+Council under Discovery Project DP210102801 and Future Fellowship
+FT240100820, as well as by the National Science Foundation under Grant
+No. AST-2406729.
+promise model training and performance on complex real-
+world charts.
+In this study, we show that modularizing
+chart generation and diversifying visual details improves
+chart understanding capabilities. In particular, we design
+a five-step data synthesis pipeline, where we separate data
+and function creation for single plot generation, condition
+the generation of later subplots on earlier ones for multi-
+subplot figures, visually diversify the generated figures, fil-
+ter out low quality data, and finally generate the question-
+answer (QA) pairs with GPT-4o. This approach allows us
+to streamline the generation of fine-tuning datasets and in-
+troduce the effective chart dataset (ECD), which contains
+10k+ chart images and 300k+ QA pairs, covering 25 top-
+1
+arXiv:2508.06492v1  [cs.CV]  8 Aug 2025
+
+ics and featuring 250+ chart type combinations with high
+visual complexity. We show that ECD consistently improves
+the performance of various MLLMs on a range of real-
+world and synthetic test sets. Code, data and models are
+available at: https://github.com/yuweiyang-anu/ECD.
+1. Introduction
+Chart understanding aims to enable MLLMs to accurately
+answer both descriptive questions (e.g., “what is the label
+of the x-axis?”) that focus on recognizing basic chart ele-
+ments, and reasoning questions (e.g., “which city demon-
+strates the second-highest GDP growth rate?”)
+that re-
+quire analytical capabilities. Several benchmarks extracted
+from real scientific papers, such as CharXiv [44], have been
+developed to evaluate model performance on chart under-
+standing tasks. But the performance of open-source mod-
+els on these benchmarks remains mediocre, highlighting the
+need for more effective data and training approaches.
+An advantage of chart data compared to natural images
+is that charts can be accurately synthesized using code,
+data, and standard libraries like Python’s plotting packages
+[19]. Unlike natural images which require extensive collec-
+tion and annotation efforts and may suffer from low faith-
+fulness when generated synthetically, charts can be cre-
+ated programmatically with high fidelity. This character-
+istic enables cost-efficient training data synthesis, an ap-
+proach widely explored in the chart understanding field
+[14, 15, 22, 23, 38, 46, 47, 49].
+However, existing synthetic chart training datasets suffer
+from limited similarity to the real data. Early datasets such
+as PlotQA [39] and OpenCQA [24], while having some
+data variations, use fixed generation code templates with
+restricted modularity, resulting in only a few chart cate-
+gories with limited style variations and inauthentic styles.
+ChartBench [49] has improved data diversity by generat-
+ing data table separately but its visual diversity is limited
+by the codes for plotting the charts. The recent ReachQA
+dataset [15], on the contrary, allows the code to be generated
+alongside the data table for the chart. However, this design
+limits the data patterns, further hurting the chart complex-
+ity. These limitations compromise their similarity to and,
+therefore, effectiveness on real-world data.
+Our work considers the above limitations and introduces
+a data synthesis pipeline that generates high-quality charts
+and question-answer (QA) pairs to mimic real charts. The
+pipeline begins with human-defined chart functions and
+separated data generation, so that GPT-4o [4] can focus on
+generating more complex data. These data and functions are
+fed into Python to render a single plot. To create coherent
+multi-subplot charts, we use previous subplots as a condi-
+tion when generating new subplots. We further diversify the
+charts by randomly adding visual elements such as annota-
+tions, area shadings, arrows, zoom-in insets, and subplot
+titles. Then, we rate the generated charts based on visual
+clarity and semantic coherence, filtering out low-quality ex-
+amples before finally generating QA pairs using GPT-4o.
+This pipeline allows us to create the effective chart
+dataset (ECD). It has over 10,000 images and 300,000+ QA
+pairs, belonging to 29 chart types and over 250 combina-
+tions of different chart types (Fig. 1). By fine-tuning open-
+source MLLMs with ECD, we show overall improvements
+on various test sets and that our improvements surpass gains
+achieved with existing chart training sets.
+2. Related Works
+Real-world
+chart
+datasets
+such
+as
+ChartQA
+[34],
+OpenCQA [24], and CharXiv [44] extract charts from on-
+line sources, providing genuine examples of visualizations
+encountered in practice.
+Despite their authenticity, such
+real-world datasets suffer from limited scale due to the ef-
+fort required for collection and annotation.
+Synthetic chart datasets have gained popularity due to
+the programmatic nature of chart generation. Early datasets
+such as FigureQA [23], DVQA [22], PlotQA [39] and Sim-
+Chart9k [46] only generate basic chart types (e.g., line, pie,
+and bar charts) using template-based approaches and exhibit
+limited complexity. More recent synthetic datasets, includ-
+ing ChartLlama [14], ChartBench [49], ChartAssistant [38],
+NovaChart [17] and ChartX [47] have expanded the number
+of images, chart types, and styles, but still demonstrate in-
+sufficient visual complexity compared to authentic scientific
+visualizations. ReachQA [15] uses large language models
+for code augmentation, but its data complexity and scale are
+limited. This work presents a new data synthesis pipeline
+and dataset, and extensive analysis demonstrates that our
+approach holistically address these limitations.
+Multimodal large language models for chart under-
+standing generally adopt two strategies. The first employs
+a two-stage approach: extracting charts into structured data
+tables or plotting codes, which then use additional modules
+for downstream question answering [11, 25, 28, 29, 46].
+The second strategy typically leverages chart-caption pairs
+for visual-language embedding alignment, followed by in-
+struction tuning in an end-to-end manner [10, 14, 18, 27,
+30, 35–38, 50, 51, 54, 56, 57, 59]. Given the powerful and
+generalizable visual-language alignment of MLLMs, per-
+forming supervised fine-tuning (SFT) is equally effective.
+Data synthesis for training MLLMs is typically clas-
+sified into two paradigms: (1) collecting real images and
+then synthesize instructions or (2) jointly synthesizing im-
+ages and instructions. Some works, such as ProVision [58],
+LAMM [55], FM2DS [1], DSPT [12] rely on publicly avail-
+able image datasets or multimodal documents. Structured
+constructs (e.g., scene graphs) or GPT are then used to gen-
+erate diverse instructions that emphasize fine-grained visual
+relationships. To reduce image collection efforts and en-
+2
+
+V. QA pair 
+generation & 
+filtering
+pre-defined chart 
+functions
+parameter 
+descriptions
+examples
++
++
+chart data generator
+e.g., data, title, labels, markers
+theme
+I. Single plot 
+generation
+II. Combined 
+subplot generation
+theme
+subplot 1
+subplot 2
+subplot 3
+subplot 4
+chart data generator
+III. Chart image 
+diversification
+Highest Point
+annotations
+area shading
+zoom-in inset
+···
+single plot
+filtered image data
+QA generator
+descriptive QA pairs 
+e.g., Q: what is the title of this chart?
+reasoning QA pairs 
+e.g., Q: which country ranks second highest in the chart?
+QA filtering
+ def plot_line_chart(...): ...
+ def plot_bar_chart(...): ...
+ def plot_radar_chart(...): ...
+ def ···
+plot_line_chart(
+    data=[1.2, 3.4, 5.1],
+    title='Line Plot',
+    labels=['A', 'B', 'C'],
+    markers=...)
+combined subplot
+title
+IV. Chart image 
+filtering
+chart image filter: visual clarity + semantic coherence
+plot_line_chart(...)
+plot_bar_chart(...)
+combined subplot
+render
+single plot
+ type + layout
+e.g., line + bar, layout (2, 2)
+Trend on ...
+Trend on ...
+×
+×
+√
+render
+Trend on ...
+···
+√
+Figure 2. Our chart generation pipeline consists of five key steps: I. Single plot generation (Sec. 3.1) creates individual charts using
+pre-defined chart functions and a separate chart data generator to produce data, titles, labels, and markers for each plot. II. Combined
+subplot generation (Sec. 3.2) produces multi-plot layouts through conditional sequential generation, where each subplot is informed by
+previous ones to maintain semantic coherence. III. Chart image diversification (Sec. 3.3) enhances visual complexity and realism by
+adding annotations, area shading, zoom-in insets, and other stylistic variations including font modifications and axis border adjustments.
+IV. Chart image filtering (Sec. 3.4) uses rating metrics based on visual clarity and semantic coherence to filter out low-quality chart
+generations and ensure chart visual quality. V. QA pair generation & filtering (Sec. 3.5) creates both descriptive questions and reasoning
+questions for the chart images, followed by additional quality filtering.
+hance privacy protection, a few automatic image-text pair
+generation methods [3, 9, 21, 32] have been proposed. The
+aforementioned methods focus on generating natural im-
+ages. In contrast, programmable images like charts [43, 52],
+SVGs [41, 48], etc. exhibit different characteristics. These
+images can be fully represented in lossless formats like
+code, enabling a more precise synthesis of instructions.
+This paper therefore focuses on chart and QA pair synthesis
+to enhance MLLMs’ chart comprehension capabilities.
+3. Proposed Data Synthesis Pipeline
+We aim to generate realistic plots whose visual content and
+stylistic characteristics are similar to real-life scientific plots
+with the assistance from GPT-4o [4]. However, generating
+charts with diverse patterns of data while maintaining real-
+ism and accuracy of QA pairs presents challenges, and even
+GPT-4o itself demonstrates imperfections. To address this,
+we introduce a modular and systematic approach as illus-
+trated in Fig. 2, decomposing the synthesis process into five
+steps described in the subsections below.
+3.1. Generating a Single Plot
+The foundation of our pipeline is to generate single plots
+with rich distributions.
+Instead of requesting GPT-4o to
+generate complete visualization codes alongside the data ta-
+ble, we strategically decompose the task by providing GPT
+with three key inputs: (1) a chart theme (e.g., mathemat-
+ics, computer science, economics), (2) chart functions that
+can plot charts of specific types, and (3) parameter descrip-
+3
+
+tions with few-shot examples. Given these inputs, GPT-4o
+generates appropriate data table and arguments including ti-
+tles, legends, axis labels, etc. By focusing on a step-by-step
+generation, we ensure the improvement on data distribu-
+tions and the semantic connection between data values and
+corresponding textual elements. Specifically, we define 29
+chart functions covering distinct chart types including line,
+bar, pie, scatter, and other common visualization formats.
+Each function contains modular Python code for rendering
+a chart based on specific parameters including data, title,
+axis labels, markers, line styles, etc. We generated 10,875
+single-plot figures through this process.
+3.2. Generating Combined Subplots
+To generate combined subplots, we implement a conditional
+generation approach: given specific chart types and layout
+configuration, it generates subplots iteratively, conditioned
+on prior subplots. This ensures consistency across the en-
+tire visualization. For example, as illustrated in Fig. 2, when
+generating subplot 3 (a line chart), our system incorporates
+data from both subplot 1 (another line chart) and subplot
+2 (a bar chart) to maintain thematic coherence. This con-
+ditional generation strengthens the relationships between
+subplots, emulates human-designed scientific figures where
+multiple subplots present complementary data perspectives.
+Through this process, we generated 6,006 multi-subplot fig-
+ures, with an average of 4 subplots per figure.
+3.3. Chart Image Diversification
+Because of the use of human-defined chart functions in Sec-
+tion 3.1 and Section 3.2, the generated charts exhibit limited
+style diversity. To solve this problem, we implement a di-
+versification process that modifies the Python code underly-
+ing each chart. For single-plot figures, we prompt GPT-4o
+to alter the code by applying randomly selected visual en-
+hancements from a predefined set of diversification strate-
+gies. These include operations such as: adding arrows, an-
+notations, or highlights; modifying font color, style, or size;
+using gradient fills or area shading; removing axis borders;
+and incorporating zoom-in insets where appropriate.
+For multi-subplot figures, we apply diversification after
+the subplot creation process (Section 3.2), modifying all
+subplots within one figure through a single GPT-4o request
+to ensure visual coherence. In addition to the enhancements
+used for single plots, we implement subplot-specific modi-
+fications such as incorporating overarching titles for the en-
+tire visualization. Additionally, we enable the use of sup-
+plementary visualization libraries beyond Matplotlib, such
+as Seaborn, to further enhance visual aesthetics. Moreover,
+we observe that some chart images, especially multi-subplot
+charts, have overly high resolutions or improper aspect ra-
+tios, resulting in unsuitable font sizes. To fix this, we add a
+post-processing step, prompting GPT-4o to adjust parame-
+ters like ‘figsize’ or ‘dpi’ in the code for better visualization.
+We apply diversification techniques and post-processing to
+all single-plot figures and multi-subplot figures and success-
+fully generate 16,829 figures, substantially increasing the
+visual complexity and stylistic variation of ECD.
+3.4. Filtering Low-quality Charts
+Despite our carefully designed pipeline, we cannot guaran-
+tee optimal visual quality for all generated charts. Common
+issues include excessive blank areas, overcrowded text el-
+ements, and misalignment between visual implementation
+and intended design. To address these challenges, we de-
+velop a quality filtering strategy that evaluates charts using
+two metrics: 1) visual clarity rvis (x, clayout), a function of
+the chart image x and the layout condition clayout; 2) seman-
+tic coherence rsem (x, ctheme), a function of the chart im-
+age x and the semantic condition ctheme. rvis measures how
+effectively a chart presents its data, considering readabil-
+ity, appropriate use of visual elements, absence of clutter,
+etc. rsem assesses how well the chart elements and subplots
+maintain a consistent theme. Both metrics are evaluated us-
+ing GPT-4o with specialized prompts (see supp. material).
+For each chart, we calculate a score by averaging its vi-
+sual clarity and semantic coherence r (x, clayout, ctheme) =
+(rs+rv)
+2
+, then compare this average to the mean score across
+the entire dataset ¯r. We retain only charts whose quality
+score exceeds the dataset mean, i.e., r (x, clayout, ctheme) >
+¯r. This method ensures our final dataset consists of charts
+that meet or exceed average quality. Starting with 16,829
+figures, we filter out approximately 37.4%, resulting in
+10,535 high-quality chart images.
+3.5. Synthesis and Filtering of QA Pairs
+The final stage of our pipeline focuses on generating high-
+quality question-answer pairs that can effectively train mul-
+timodal models for chart understanding tasks. We use GPT-
+4o to synthesize these pairs by providing it with the fil-
+tered chart images, their generation code, and the under-
+lying data. We categorize the generated QA pairs into de-
+scriptive and reasoning types. Descriptive questions focus
+on identifying and describing basic visual elements of the
+chart, whereas reasoning questions require analytical think-
+ing and inference about the data relationships. For descrip-
+tive questions, we retain only the final answer as the ground
+truth. For reasoning questions, we preserve both the step-
+by-step rationale and the final answer, enabling models to
+learn both the outcome and the reasoning process.
+To ensure quality, we implement a confidence-based fil-
+tering mechanism. When generating each QA pair, we re-
+quest GPT-4o to assign a confidence score on a scale of 1
+to 5, reflecting its certainty in the correctness of the answer.
+We only retain pairs with the highest confidence score of 5,
+eliminating potentially ambiguous or erroneous pairs. Start-
+4
+
+Dataset
+#Themes
+#Chart types
+#Type Combo.
+#Images
+Synthetic
+Subplots
+#QA Pairs
+Training set
+OpenCQA [24]
+10
+5
+1
+1.2k
+×
+×
+1.2k
+×
+ChartX [47]
+22
+18
+1
+6k
+✓
+×
+6k
+×
+CharXiv [44]
+-
+-
+-
+2.3k
+×
+✓
+5k
+×
+PlotQA [39]
+-
+3
+1
+224k
+✓
+×
+29M
+✓
+ChartQA [34]
+15
+3
+1
+21.9k
+×
+×
+32.7k
+✓
+ChartLlama [14]
+10
+10
+1
+11k
+✓
+×
+160k
+✓
+ChartBench [49]
+9
+9
+4
+68.7k
+✓
+×
+618.5k
+✓
+ChartAssistant [38]
+-
+9
+1
+-
+×
+×
+-
+✓
+SimChart9k [46]
+-
+3
+1
+9k
+✓
+×
+9k
+✓
+MMC [30]
+5
+6
+-
+600k
+×
+✓
+600k
+✓
+ReachQA [15]
+-
+10
+-
+3.7k
+✓
+✓
+22k
+✓
+ECD (ours)
+25
+29
+252
+10.5k
+✓
+✓
+321.5k
+✓
+Table 1. Comparing the effective chart dataset (ECD) with existing chart datasets. ECD has the most themes, chart types, and type combi-
+nations. Although it is not the biggest, experiments show it enables consistent improvements on MLLM chart understanding capabilities.
+ChartBench
+ChartAssistant
+SimChart9K
+ChartX
+ReachQA
+Effective Chart
+60
+80
+100
+120
+FID Score
+73.76
+114.03
+94.57 91.87
+74.80
+60.74
+PlotQA
+ChartBench
+ChartAssistant
+SimChart9K
+ChartX
+ReachQA
+Effective Chart
+ChartQA
+MMC
+ChartXiv
+0
+1
+2
+3
+Average Entropy
+0.93
+1.65
+0.97
+1.54
+1.62
+1.97
+2.24
+2.07
+1.23
+2.77
+Synthetic
+Real
+Figure 3. Data complexity and realism comparison beween ECD and other datasets. Left: FID comparison. FID is computed between
+each compared dataset with CharXiv [44]. ECD has the lowest FID score so has stronger alignment with real scientific charts. Right: We
+measure complexity using average entropy of pixel values across images. ECD achieves higher average entropy than the synthetic datasets.
+ing with 348,862 initially generated QA pairs from 10,535
+images, we filtered out approximately 7.8% based on the
+confidence scoring mechanism. The final dataset contains
+321,544 high-quality QA pairs that cover both descriptive
+and reasoning tasks.
+4. Effective Chart Dataset
+The above pipeline allows us to construct the effective chart
+dataset (ECD). Table 1 presents a comparative analysis be-
+tween ECD and existing chart datasets.
+Styling coverage.
+ECD has 25 themes and 29 chart
+types, surpassing all other synthetic training datasets and
+providing broader contextual coverage across fields includ-
+ing economics, biology, physics, and sociology. It also has
+252 combination types, e.g., bar + line and pie + line. This
+is significantly higher than most datasets that only have sin-
+gle plots, such as PlotQA. CharXiv, MMC, and ReachQA
+also have some types of combinations, but their counts are
+unspecified. In terms of scale, ECD contains 10,535 chart
+images and 321,544 question-answer pairs.
+Data realism. We compute Fr´echet inception distance
+(FID) [42] between various datasets and CharXiv, a chal-
+lenging real-world datasets crawled from arXiv papers. We
+show the results in Fig. 3 left. We clearly observe that ECD
+has higher similarity with CharXiv than the other synthetic
+datasets as measured by FID.
+Data complexity. We measure complexity using average
+entropy (see supp.), computed from image pixel values. For
+charts, average entropy essentially reflects the sophistica-
+tion of individual charts, including the number of subplots,
+line intersections, data points, categorical elements, and the
+presence of non-trivial data patterns. We show complexity
+comparison of chart datasets in Fig. 3 right. We observe
+ECD has high average entropy among synthetic datasets.
+ECDBench construction. We construct an additional
+test set named ECDBench using the same five-stage data
+generation pipeline described earlier. This process produces
+single charts (e.g., line charts), multi-layout combination
+charts with one or two types (e.g., bar charts with a (3, 2)
+layout, bar + line charts with a (2, 4) layout), and three-type
+combination charts (e.g., bar + pie + area charts with a (1, 3)
+layout), resulting in 1,596 chart images after initial filtering.
+To ensure data quality, we perform a two-stage rigorous
+5
+
+review process. For the first stage, chart image filtering is
+conducted, where annotators remove images with signifi-
+cant visual recognition issues, yielding 1,224 charts. For
+minor issues such as overlaps, blank areas, incomplete leg-
+ends or small fonts, they adjust the code and re-render the
+charts. In the second stage, annotators carefully verify the
+visual answerability of the questions by sampling one de-
+scriptive and one reasoning-based question from the candi-
+date generated QA pairs for each chart. They also correct
+inconsistencies within the QA pairs and rewrite overly sim-
+plistic, inaccurate, or meaningless QA pairs based on their
+expertise. The aforementioned process ultimately produces
+1,224 high-quality chart images and 2,448 high-quality QA
+pairs (each accompanied by one descriptive QA and one
+reasoning-based QA) for subsequent evaluation. More sta-
+tistical information and evaluations can be found in the sup-
+plementary materials.
+5. Experiments
+5.1. Datasets, MLLMs, and Evaluation Protocols
+Datasets. To verify the effectiveness of the effective chart
+dataset (ECD), we test the trained models across six bench-
+marks: two real-world datasets (CharXiv [44] and ChartQA
+[34]) and four synthetic datasets (ReachQA [15], Chart-
+Bench [49], ChartX [47] and ECDBench), for a compre-
+hensive evaluation.
+Specifically, for real-world data, the recently pub-
+lished CharXiv benchmark [44] comprises 2,323 chal-
+lenging charts extracted from arXiv papers and includes
+4,000 descriptive questions about basic chart elements and
+1,000 reasoning questions requiring complex visual anal-
+ysis. ChartQA [34] contains charts crawled from 4 on-
+line sources, with both human-annotated and machine-
+generated QA pairs, including a test set of 1,509 images
+with corresponding 2500 questions. Among the synthetic
+benchmarks, ReachQA [34] includes 500 chart images with
+1,000 recognition and 1,000 reasoning questions; Chart-
+Bench [49] consists of 2,100 images paired with 18,900 QA
+pairs (2,100 numerical (NQA) and 16,800 binary “yes/no”
+questions); and ChartX [47] contains 1,152 test chart im-
+ages, each with a corresponding question-answer pair.
+MLLMs.
+We comprehensively evaluate 4 open-
+source MLLMs: LLaVA-Next-Llama3-8B [26], MiniCPM-
+V2.6 [53], Phi-3-Vision [2] and the recent Qwen2.5-VL-
+7B [8], which have diverse architectures and training ap-
+proaches. We fine-tune these models using ECD with a mix
+of parameter-efficient and full-parameter fine-tuning meth-
+ods. We adopt LoRA [16] for LLaVA-Next-Llama3-8B,
+MiniCPM-V2.6, and Qwen2.5-VL-7B, while performing
+full-parameter fine-tuning for Phi-3-Vision (4.2B). Specifi-
+cally, we use a LoRA rank of 8, alpha of 16, a learning rate
+of 1 × 10−4, and train for 1 epoch for both LLaVA-Next-
+Llama3-8B and MiniCPM-V2.6, with batch sizes of 4 (on
+4 A100 80G GPUs) and 1 (on a single A100 80G GPU),
+respectively. Phi-3-Vision is fine-tuned with a batch size
+of 96 and learning rates of 5 × 10−6 for most parameters
+and 5 × 10−8 for the projector, while Qwen2.5-VL-7B is
+fine-tuned with a LoRA rank of 64, alpha of 64, a batch
+size of 128, and learning rates of 1 × 10−4 for most pa-
+rameters and 1 × 10−5 for the projector, both trained for 1
+epoch on 4 A100 80G GPUs. In all experiments, the vision
+tower is frozen, and only the remaining parts of models are
+fine-tuned.
+Evaluation Protocols. We perform QA tests on the of-
+ficial test sets without any specific additional prompts, e.g.,
+chain-of-thought. By default, we use the widely accepted
+GPT-Acc [15, 44, 47] as the accuracy metric, i.e., using
+GPT-4o to extract the answer and evaluate the correctness.
+For ChartQA, ChartBench NQA and ChartX, we follow the
+official guidelines, allowing a 5% tolerance for questions
+with numerical answers. Our constructed ECDBench sim-
+ilarly follows the previously established evaluation pattern.
+For ReachQA and CharXiv, we directly utilize the official
+prompt templates for testing. Additionally, for the large
+number of “yes/no” binary questions in ChartBench, we
+employ a simple regular expression to match the answer and
+compute the accuracy.
+5.2. Main Evaluation
+Effective Chart consistently improves MLLMs in chart
+understanding.
+We fine-tune the mentioned four open-
+source MLLMs with ECD and evaluate the fine-tuned mod-
+els on six test sets. Results are summarized in Tab. 2. We
+observe that ECD improves the overall performance of four
+MLLMs.
+For instance, LLaVA-Next-Llama3-8B’s accu-
+racy increases from 64.56% to 68.64% and from 27.69% to
+46.61% on ChartQA and ChartX, respectively. On the chal-
+lenging CharXiv benchmark, ECD boosts Phi-3-Vision’s
+accuracy from 31.50% and 60.52% to 33.40% and 68.00%
+for reasoning and descriptive questions.
+ECD fine-tuning causes slight performance drops in spe-
+cific metrics, as shown by the red-highlighted results in
+Tab. 2. MiniCPM-V2.6 and Qwen2.5-VL-7B see decreases
+on “Binary” questions in ChartBench, likely due to its
+unique distribution with “yes/no” questions only. For the
+latest SOTA Qwen2.5-VL-7B, while it achieves notable
+average improvements on CharXiv and ReachQA, minor
+drops (e.g., reasoning accuracy on CharXiv, from 41.20% to
+40.20%, recognition accuracy on ReachQA, from 71.90%
+to 70.80%) may be attributed to its pre-training on clean
+chart data, which closely resembles certain benchmarks.
+Moreover, the data mixture ratio during fine-tuning might
+not have been fully optimized for specific tasks or models.
+On ECDBench, performance significantly improves due
+to the similar QA distribution advantage: LLaVA-Next-
+6
+
+Models
+CharXiv
+ChartQA
+ReachQA
+ChartBench
+ChartX
+ECDBench
+Rea.
+Des.
+Avg.
+QA
+Rea.
+Recog.
+Avg.
+Binary
+NQA
+Avg.
+QA
+Rea.
+Des.
+Avg.
+Baselines
+Human
+80.50
+92.10
+89.78
+-
+65.10
+84.60
+74.85
+-
+-
+-
+-
+-
+-
+-
+Random (GPT-4o) [4]
+10.80
+19.85
+18.04
+30.04
+8.20
+13.30
+10.75
+-
+22.73
+-
+11.46
+4.58
+1.63
+3.10
+Proprietary multimodal large language models
+GPT-4o mini [4]
+34.10
+74.92
+66.76
+77.52
+27.20
+53.50
+40.35
+-
+34.93
+-
+44.36
+24.26
+57.27
+40.77
+GPT-4o [4]
+47.10
+84.45
+76.98
+85.70
+39.70
+66.80
+53.25
+-
+52.88
+-
+58.33
+35.62
+70.18
+52.90
+Claude 3.5 Sonnet [5]
+60.20
+84.30
+79.48
+90.80
+51.70
+74.30
+63.00
+-
+48.29
+-
+42.71
+41.99
+68.14
+55.07
+Open-source multimodal large language models
+LLaVA-Next-Llama3-8B [26]
+19.70
+38.90
+35.06
+64.56
+8.00
+23.30
+15.65
+61.18
+38.29
+58.64
+27.69
+4.74
+17.16
+10.95
++ ECD
+21.80
+59.05
+51.60
+68.64
+12.70
+37.50
+25.10
+64.21
+47.05
+62.30
+46.61
+16.50
+46.65
+31.58
+MiniCPM-V2.6 [53]
+25.40
+52.65
+47.20
+76.96
+14.50
+48.10
+31.30
+75.67
+52.33
+73.08
+47.31
+15.15
+39.95
+27.53
++ ECD
+26.90
+61.90
+54.91
+77.28
+17.50
+48.40
+32.95
+70.77
+52.81
+68.77
+50.43
+18.14
+52.21
+35.17
+Phi-3-Vision [2]
+31.50
+60.52
+54.72
+81.92
+28.40
+62.80
+45.60
+71.92
+62.71
+70.90
+67.53
+21.65
+41.18
+31.41
++ ECD
+33.40
+68.00
+61.08
+84.88
+32.80
+64.50
+48.65
+73.49
+63.76
+72.41
+71.44
+29.49
+59.31
+44.40
+Qwen2.5-VL-7B [8]
+41.20
+66.40
+61.36
+83.04
+29.70
+71.90
+50.80
+80.99
+67.81
+79.53
+67.80
+19.04
+57.35
+38.19
++ ECD
+40.20
+74.20
+67.40
+85.32
+36.20
+70.80
+53.50
+79.35
+70.86
+78.41
+70.83
+35.38
+66.34
+50.86
+Table 2. Comparing MLLMs on six test sets. “Rea.”, “Des.”, and “Recog.” mean reasoning, descriptive, and recognition questions,
+respectively. “Binary” denotes “yes/no” answers, and NQA means numerical QAs. When fine-tuned on our effective chart dataset, except
+a few individual metrics (highlighted in red), the four open-source MLLMs display overall improvements (highlighted in green).
+Training set
+Test set
+CharXiv
+ChartQA
+ReachQA
+ChartBench
+ChartX
+ECDBench
+Baseline
+35.06
+64.56
+15.65
+58.64
+27.69
+10.95
+ChartQA
+35.16
+68.92
+15.00
+61.41
+31.51
+13.11
+ChartBench
+32.86
+61.56
+18.35
+75.13
+37.33
+10.99
+ReachQA
+30.68
+64.50
+24.35
+57.59
+39.24
+13.48
+ECD
+51.60
+68.64
+25.10
+62.30
+46.61
+31.58
+Table 3. Comparing different chart training sets of their fine-tuning
+performance on 6 test sets.
+Green indicates performance growth
+and red highlights decline. We use LLaVA-Next-Llama3-8B [26]
+as the baseline and fine-tune it on ChartQA [34], ChartBench [49],
+ReachQA [15], and ECD. For each column, best number is in
+bold, and second best underlined.
+Llama3-8B’s average accuracy increases from 10.95% to
+31.58%, and Qwen2.5-VL-7B achieves the highest accu-
+racy, rising from 38.19% to 50.86%.
+Comparison with other training datasets.
+We then
+compare ECD with other chart understanding training
+sets, including ChartQA [34], ChartBench [49],
+and
+ReachQA [15]. To do so, we use these datasets to fine-tune
+LLaVA-Next-Llama3-8B, evaluate the fine-tuned models
+on six test sets, and report the average accuracy. Results
+are presented in Tab. 3.
+While the existing training sets improve on their own test
+sets and those with a similar distribution, for other test sets,
+the fine-tuned model often results in performance drops.
+For example, since ChartBench has a very different QA dis-
+tribution, comprising mostly binary QA, training on it gives
+the best evaluation result for this dataset. However, it also
+falls behind on two other benchmarks.
+In comparison, ECD consistently improves the baseline
+performance across 6 test sets, while other chart training
+datasets show the mixed and less consistent results. In addi-
+tion, ECD yields the largest improvement on the CharXiv,
+ReachQA, ChartX, and our ECDBench, and the second-
+largest improvement on ChartQA and ChartBench.
+5.3. Ablation Study
+To isolate the effects of specific design choices, we con-
+duct a series of ablation studies. When comparing vari-
+ants of ECD in this section, we maintain consistent im-
+age counts for fair comparisons. We select LLaVA-Next-
+Llama3-8B [26] as the base model for our study and con-
+duct experiments on each plot image by randomly selecting
+five QA pairs (including both descriptive and reasoning QA
+pairs) to examine the chart types, themes, and QA type.
+Impact of number of chart types. As shown in Fig. 4
+(a), increasing the number of chart types from 5 to 29 yields
+progressive improvements on the CharXiv test set.
+This
+confirms the importance of diverse training chart types for
+effective generalization to real-world charts.
+Impact of number of chart themes. Fig. 4 (b) demon-
+strates that expanding thematic coverage improves model
+performance, though the improvement gradually slows as
+the number of themes increases, with the best results
+achieved at 25 themes. This indicates the usefulness of hav-
+ing more themes.
+Impact of QA Type. Fig. 4 (c) compares the pre-trained
+LLaVA-Next baseline and with the same fine-tuned with
+three ECD variants, including one with descriptive ques-
+tions only, one with reasoning questions only, and the full
+ECD. We observe that using either descriptive (+4.16%) or
+reasoning questions (+6.40%) improves performance, with
+greater gains observed when using reasoning questions ex-
+clusively. The best model is obtained with the full ECD
+fine-tuning, which yields 47.02% accuracy. Results validate
+the inclusion of both types of questions.
+7
+
+5
+10
+15
+29
+Number of Chart Types
+40
+41
+42
+43
+44
+45
+Accuracy (%)
+40.38
+41.42
+41.46
+43.34
+(a)
+5
+10
+15
+25
+Number of Chart Themes
+40
+41
+42
+43
+44
+45
+Accuracy (%)
+42.60
+43.10
+43.28
+43.32
+(b)
+Baseline Descriptive Reasoning
+All
+QA Type
+35
+40
+45
+50
+Accuracy (%)
+35.06
+39.22
+41.46
+47.02
+(c)
+Figure 4. Impact of the number of chart types (a), chart themes (b), and QA type (c). Average accuracy on CharXiv is reported. In the
+compared variants, we make sure the numbers of images are the same. LLaVA-Next-Llama3-8B is selected as the baseline model.
+5.4. Further Analysis
+Impact of data scale. Experimental results on data scal-
+ing are shown in Tab. 4. We find that increasing data size
+(default scale is 10k) consistently improves average per-
+formance on the synthetic benchmark ReachQA. For real-
+world benchmark CharXiv, the gains saturate beyond 20k,
+probably due to the complexity of this task. As future work,
+we will scale up data in the pre-training phase.
+Test set
+2k
+5k
+10k
+20k
+30k
+40k
+CharXiv
+40.46
+45.66
+46.84
+48.90
+47.84
+48.26
+ReachQA
+18.25
+18.85
+20.85
+22.25
+23.50
+24.75
+Table 4. Impact of data scale (5 selected QA pairs per image).
+Impact of data mixture ratios. We tried different ra-
+tios of descriptive and reasoning questions of ECD (50k QA
+pairs in total). Results on our CharXiv are shown in Tab. 5.
+Interestingly, we find the average accuracy metrics peak at
+a 2:3 or 1:1 ratio. This may be because our definition of de-
+scriptive/reasoning does not perfectly match the definition
+on the benchmarks. Another possible reason is the benefit
+of having both types of questions on VLM training, which
+needs further exploration.
+CharXiv
+0:5
+1:4
+2:3
+1:1
+3:2
+4:1
+5:0
+Descriptive Acc 51.25 53.88 53.75 54.90 54.25 52.92 47.48
+Reasoning Acc
+20.20 19.20 20.90 20.50 20.00 20.90 22.50
+Average Acc
+45.04 46.94 47.18 48.02 47.40 46.52 42.48
+Table 5. Impact of data ratios (descriptive vs. reasoning).
+Impact of visual diversification.
+We use FID (with
+CharXiv) and average pixel entropy to evaluate image qual-
+ity with or without the diversification step (Section 3.3). Re-
+sults are presented in Tab. 6 (a) and (b). It is shown that
+adding diversification is very beneficial, which decreases
+FID by 19.64 and increases average entropy by 0.57.
+Importance of image and QA quality filtering.
+In
+Tab. 6 (c) and (d), we compare dataset quality with or with-
+out image quality filtering (Section 3.4).
+If we remove
+quality filtering, the FID score with the CharXiv dataset
+increases by 5.46, and the average entropy decreases by
+0.08. The results show that filtering out low-quality im-
+Data Strategy
+FID↓
+Avg. Entropy↑
+(a) w/o Visual Diversification
+80.38 ± 1.45
+1.67
+(b) w Visual Diversification
+60.74 ± 1.32
+2.24
+(c) w/o Image Filtering
+66.20 ± 1.11
+2.16
+(d) w Image Filtering
+60.74 ± 1.32
+2.24
+Table 6. Comparing data processing strategies. We compare visual
+diversification and the image filtering strategies with not applying
+them. We report FID (with CharXiv) and average pixel entropy.
+ages is beneficial. Moreover, to validate the effectiveness
+of QA filtering (Section 3.5), we remove the QA filtering
+step and compare the fine-tuned LLaVA-Next-Llama3-8B.
+Results are shown in Tab. 7. We observe that ECD without
+QA filtering still improves the baseline by 11.58% and that
+with QA filtering the improvement becomes 11.96%. The
+additional improvement outlines the benefit of doing so.
+CharXiv
+Rea.
+Des.
+Avg.
+LLaVA-Next-Llama3-8B
+19.70
+38.90
+35.06
+w/o QA Filtering
+19.50
+53.42
+46.64
+w QA Filtering
+20.90
+53.55
+47.02
+Table 7. Quantitative performance comparison before and after
+QA filtering. The average performance improves after filtering.
+6. Conclusion
+This paper introduces a chart synthesis pipeline and the
+effective chart dataset (ECD), a high-quality multimodal
+training resource that enhances chart understanding capa-
+bilities in existing MLLMs. Through systematic ablation
+studies and comparative evaluations, we demonstrate how
+each component of our pipeline contributes to the overall
+effectiveness of the resulting dataset. The effective chart
+dataset generally improves the accuracy of MLLMs across
+multiple test sets. Particularly notable is the improvement
+on challenging real-world chart benchmarks like CharXiv,
+highlighting our approach’s ability to bridge the gap be-
+tween synthetic training data and authentic scientific visual-
+izations. The modular nature of our pipeline enables further
+extensions and customizations, while our findings regard-
+ing the importance of quality and complexity in synthetic
+data generation have broader implications for multimodal
+training dataset development.
+8
+
+References
+[1] Amirhossein Abaskohi, Spandana Gella, Giuseppe Carenini,
+and Issam H Laradji. Fm2ds: Few-shot multimodal multi-
+hop data synthesis with knowledge distillation for question
+answering. arXiv preprint arXiv:2412.07030, 2024. 2
+[2] Marah Abdin, Jyoti Aneja, Hany Awadalla, Ahmed Awadal-
+lah, Ammar Ahmad Awan, Nguyen Bach, Amit Bahree,
+Arash Bakhtiari, Jianmin Bao, Harkirat Behl, et al. Phi-3
+technical report: A highly capable language model locally
+on your phone. arXiv preprint arXiv:2404.14219, 2024. 6, 7
+[3] Hossein Aboutalebi, Hwanjun Song, Yusheng Xie, Arshit
+Gupta, Justin Sun, Hang Su, Igor Shalyminov, Nikolaos Pap-
+pas, Siffi Singh, and Saab Mansour. Magid: An automated
+pipeline for generating synthetic multi-modal datasets. arXiv
+preprint arXiv:2403.03194, 2024. 3
+[4] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ah-
+mad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida,
+Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al.
+Gpt-4 technical report.
+arXiv preprint arXiv:2303.08774,
+2023. 2, 3, 7, 12
+[5] Anthropic.
+Introducing claude 3.5 sonnet.
+https:
+/ / www . anthropic . com / news / claude - 3 - 5 -
+sonnet, 2024. 7, 12
+[6] Anthropic. Claude 3.7 sonnet and claude code. https:
+/ / www . anthropic . com / news / claude - 3 - 7 -
+sonnet, 2025. 12
+[7] Anthropic.
+Introducing claude 4.
+https://www.
+anthropic.com/news/claude-4, 2025. 12
+[8] Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin
+Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun
+Tang, et al. Qwen2. 5-vl technical report. arXiv preprint
+arXiv:2502.13923, 2025. 6, 7, 12
+[9] Tim Brooks, Aleksander Holynski, and Alexei A Efros. In-
+structpix2pix:
+Learning to follow image editing instruc-
+tions. In Proceedings of the IEEE/CVF Conference on Com-
+puter Vision and Pattern Recognition (CVPR), pages 18392–
+18402, 2023. 3
+[10] Victor C˘arbune, Hassan Mansoor, Fangyu Liu, Rahul Ar-
+alikatte, Gilles Baechler, Jindong Chen, and Abhanshu
+Sharma.
+Chart-based reasoning: Transferring capabilities
+from llms to vlms. In Findings of the Association for Compu-
+tational Linguistics: NAACL 2024, pages 989–1004, 2024. 2
+[11] Jinyue Chen, Lingyu Kong, Haoran Wei, Chenglong Liu,
+Zheng Ge, Liang Zhao, Jianjian Sun, Chunrui Han, and Xi-
+angyu Zhang. Onechart: Purify the chart structural extrac-
+tion via one auxiliary token. In Proceedings of the 32nd ACM
+International Conference on Multimedia (ACM MM), pages
+147–155, 2024. 2
+[12] Daixuan Cheng, Shaohan Huang, Ziyu Zhu, Xintong Zhang,
+Wayne Xin Zhao, Zhongzhi Luan, Bo Dai, and Zhenliang
+Zhang.
+On domain-specific post-training for multimodal
+large language models.
+arXiv preprint arXiv:2411.19930,
+2024. 2
+[13] Gheorghe Comanici, Eric Bieber, Mike Schaekermann, Ice
+Pasupat, Noveen Sachdeva, Inderjit Dhillon, Marcel Blis-
+tein, Ori Ram, Dan Zhang, Evan Rosen, et al. Gemini 2.5:
+Pushing the frontier with advanced reasoning, multimodality,
+long context, and next generation agentic capabilities. arXiv
+preprint arXiv:2507.06261, 2025. 12
+[14] Yucheng Han, Chi Zhang, Xin Chen, Xu Yang, Zhibin Wang,
+Gang Yu, Bin Fu, and Hanwang Zhang. Chartllama: A mul-
+timodal llm for chart understanding and generation. arXiv
+preprint arXiv:2311.16483, 2023. 2, 5
+[15] Wei He, Zhiheng Xi, Wanxu Zhao, Xiaoran Fan, Yiwen
+Ding, Zifei Shan, Tao Gui, Qi Zhang, and Xuanjing Huang.
+Distill visual chart reasoning ability from llms to mllms.
+arXiv preprint arXiv:2410.18798, 2024. 2, 5, 6, 7, 14, 17
+[16] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-
+Zhu, Yuanzhi Li, Shean Wang, Lu Wang, Weizhu Chen, et al.
+Lora: Low-rank adaptation of large language models. ICLR,
+1(2):3, 2022. 6
+[17] Linmei Hu, Duokang Wang, Yiming Pan, Jifan Yu, Yingxia
+Shao, Chong Feng, and Liqiang Nie. Novachart: A large-
+scale dataset towards chart understanding and generation of
+multimodal large language models. In Proceedings of the
+32nd ACM International Conference on Multimedia (ACM
+MM), pages 3917–3925, 2024. 2
+[18] Muye Huang, Lai Han, Xinyu Zhang, Wenjun Wu, Jie Ma,
+Lingling Zhang, and Jun Liu. Evochart: A benchmark and a
+self-training approach towards real-world chart understand-
+ing. arXiv preprint arXiv:2409.01577, 2024. 2
+[19] J. D. Hunter. Matplotlib: A 2d graphics environment. Com-
+puting in Science & Engineering, 9(3):90–95, 2007. 2
+[20] Aaron Jaech, Adam Kalai, Adam Lerer, Adam Richard-
+son, Ahmed El-Kishky, Aiden Low, Alec Helyar, Aleksander
+Madry, Alex Beutel, Alex Carney, et al. Openai o1 system
+card. arXiv preprint arXiv:2412.16720, 2024. 12
+[21] Qirui Jiao, Daoyuan Chen, Yilun Huang, Yaliang Li,
+and Ying Shen.
+Img-diff:
+Contrastive data synthesis
+for multimodal large language models.
+arXiv preprint
+arXiv:2408.04594, 2024. 3
+[22] Kushal Kafle, Brian Price, Scott Cohen, and Christopher
+Kanan. Dvqa: Understanding data visualizations via ques-
+tion answering.
+In Proceedings of the IEEE Conference
+on Computer Vision and Pattern Recognition (CVPR), pages
+5648–5656, 2018. 2
+[23] Samira Ebrahimi Kahou, Vincent Michalski, Adam Atkin-
+son, ´Akos K´ad´ar, Adam Trischler, and Yoshua Bengio. Fig-
+ureqa: An annotated figure dataset for visual reasoning.
+arXiv preprint arXiv:1710.07300, 2017. 2
+[24] Shankar Kantharaj, Xuan Long Do, Rixie Tiffany Leong,
+Jia Qing Tan, Enamul Hoque, and Shafiq Joty.
+Opencqa:
+Open-ended question answering with charts. In Proceedings
+of the 2022 Conference on Empirical Methods in Natural
+Language Processing (EMNLP), pages 11817–11837, 2022.
+2, 5
+[25] Kenton Lee, Mandar Joshi, Iulia Raluca Turc, Hexiang Hu,
+Fangyu Liu, Julian Martin Eisenschlos, Urvashi Khandel-
+wal, Peter Shaw, Ming-Wei Chang, and Kristina Toutanova.
+Pix2struct: Screenshot parsing as pretraining for visual lan-
+guage understanding. In International Conference on Ma-
+chine Learning (ICML), pages 18893–18912. PMLR, 2023.
+2
+[26] Bo Li, Kaichen Zhang, Hao Zhang, Dong Guo, Renrui
+Zhang, Feng Li, Yuanhan Zhang, Ziwei Liu, and Chunyuan
+9
+
+Li. Llava-next: Stronger llms supercharge multimodal ca-
+pabilities in the wild (2024). URL https://llava-vl. github.
+io/blog/2024-05-10-llava-next-stronger-llms. 6, 7
+[27] Zhuowan Li, Bhavan Jasani, Peng Tang, and Shabnam
+Ghadar. Synthesize step-by-step: Tools templates and llms
+as data generators for reasoning-based chart vqa. In Proceed-
+ings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition (CVPR), pages 13613–13623, 2024. 2
+[28] Fangyu Liu, Julian Eisenschlos, Francesco Piccinno, Syrine
+Krichene, Chenxi Pang, Kenton Lee, Mandar Joshi, Wenhu
+Chen, Nigel Collier, and Yasemin Altun. Deplot: One-shot
+visual language reasoning by plot-to-table translation.
+In
+Findings of the Association for Computational Linguistics:
+ACL 2023, pages 10381–10399, 2023. 2
+[29] Fangyu Liu, Francesco Piccinno, Syrine Krichene, Chenxi
+Pang, Kenton Lee, Mandar Joshi, Yasemin Altun, Nigel Col-
+lier, and Julian Eisenschlos. Matcha: Enhancing visual lan-
+guage pretraining with math reasoning and chart derender-
+ing. In Proceedings of the 61st Annual Meeting of the Asso-
+ciation for Computational Linguistics (Volume 1: Long Pa-
+pers), pages 12756–12770, 2023. 2
+[30] Fuxiao Liu, Xiaoyang Wang, Wenlin Yao, Jianshu Chen,
+Kaiqiang Song, Sangwoo Cho, Yaser Yacoob, and Dong
+Yu.
+Mmc:
+Advancing multimodal chart understand-
+ing with large-scale instruction tuning.
+arXiv preprint
+arXiv:2311.10774, 2023. 2, 5
+[31] Yuan Liu, Haodong Duan, Yuanhan Zhang, Bo Li, Songyang
+Zhang, Wangbo Zhao, Yike Yuan, Jiaqi Wang, Conghui He,
+Ziwei Liu, et al. Mmbench: Is your multi-modal model an
+all-around player? In European conference on computer vi-
+sion (ECCV), pages 216–233. Springer, 2024. 13
+[32] Zheng Liu, Hao Liang, Xijie Huang, Wentao Xiong, Qinhan
+Yu, Linzhuang Sun, Chong Chen, Conghui He, Bin Cui, and
+Wentao Zhang. Synthvlm: High-efficiency and high-quality
+synthetic data for vision language models. arXiv preprint
+arXiv:2407.20756, 2024. 3
+[33] Pan Lu, Hritik Bansal, Tony Xia, Jiacheng Liu, Chunyuan Li,
+Hannaneh Hajishirzi, Hao Cheng, Kai-Wei Chang, Michel
+Galley, and Jianfeng Gao. Mathvista: Evaluating mathemat-
+ical reasoning of foundation models in visual contexts. arXiv
+preprint arXiv:2310.02255, 2023. 13
+[34] Ahmed Masry, Xuan Long Do, Jia Qing Tan, Shafiq Joty,
+and Enamul Hoque. Chartqa: A benchmark for question an-
+swering about charts with visual and logical reasoning. In
+Findings of the Association for Computational Linguistics:
+ACL 2022, pages 2263–2279, 2022. 2, 5, 6, 7, 14, 17
+[35] Ahmed Masry, Parsa Kavehzadeh, Xuan Long Do, Ena-
+mul Hoque, and Shafiq Joty. Unichart: A universal vision-
+language pretrained model for chart comprehension and rea-
+soning. In Proceedings of the 2023 Conference on Empirical
+Methods in Natural Language Processing (EMNLP), pages
+14662–14684, 2023. 2
+[36] Ahmed Masry, Mehrad Shahmohammadi, Md Rizwan
+Parvez, Enamul Hoque, and Shafiq Joty.
+Chartinstruct:
+Instruction tuning for chart comprehension and reasoning.
+arXiv preprint arXiv:2403.09028, 2024.
+[37] Ahmed Masry, Megh Thakkar, Aayush Bajaj, Aaryaman
+Kartha, Enamul Hoque, and Shafiq Joty. Chartgemma: Vi-
+sual instruction-tuning for chart reasoning in the wild. arXiv
+preprint arXiv:2407.04172, 2024.
+[38] Fanqing Meng, Wenqi Shao, Quanfeng Lu, Peng Gao,
+Kaipeng Zhang, Yu Qiao, and Ping Luo. Chartassisstant: A
+universal chart multimodal language model via chart-to-table
+pre-training and multitask instruction tuning. arXiv preprint
+arXiv:2401.02384, 2024. 2, 5, 14, 17
+[39] Nitesh Methani, Pritha Ganguly, Mitesh M Khapra, and
+Pratyush Kumar.
+Plotqa: Reasoning over scientific plots.
+In Proceedings of the IEEE/CVF Winter Conference on Ap-
+plications of Computer Vision (WACV), pages 1527–1536,
+2020. 2, 5, 14, 17
+[40] OpenAI.
+Openai o3 and o4-mini system card.
+https:
+/ / cdn . openai . com / pdf / 2221c875 - 02dc -
+4789-800b-e7758f3722c1/o3-and-o4-mini-
+system-card.pdf, 2025. 12
+[41] Juan A Rodriguez, Shubham Agarwal, Issam H Laradji, Pau
+Rodriguez, David Vazquez, Christopher Pal, and Marco Ped-
+ersoli. Starvector: Generating scalable vector graphics code
+from images. arXiv preprint arXiv:2312.11556, 2023. 3
+[42] Tim Salimans, Ian Goodfellow, Wojciech Zaremba, Vicki
+Cheung, Alec Radford, and Xi Chen. Improved techniques
+for training gans. Advances in neural information processing
+systems, 29, 2016. 5, 14
+[43] Chufan Shi, Cheng Yang, Yaxin Liu, Bo Shui, Junjie Wang,
+Mohan Jing, Linran Xu, Xinyu Zhu, Siheng Li, Yuxiang
+Zhang, et al. Chartmimic: Evaluating lmm’s cross-modal
+reasoning capability via chart-to-code generation.
+arXiv
+preprint arXiv:2406.09961, 2024. 3
+[44] Zirui Wang, Mengzhou Xia, Luxi He, Howard Chen, Yitao
+Liu, Richard Zhu, Kaiqu Liang, Xindi Wu, Haotian Liu, Sad-
+hika Malladi, et al. Charxiv: Charting gaps in realistic chart
+understanding in multimodal llms. In Advances in Neural
+Information Processing Systems (NeurIPS), 2024. 2, 5, 6
+[45] xAI Organization.
+Realworldqa: A benchmark for real-
+world understanding.
+https://huggingface.co/
+datasets/xai-org/RealworldQA, 2025. 13
+[46] Renqiu Xia, Bo Zhang, Haoyang Peng, Hancheng Ye, Xi-
+angchao Yan, Peng Ye, Botian Shi, Yu Qiao, and Junchi
+Yan. Structchart: Perception, structuring, reasoning for vi-
+sual chart understanding. arXiv preprint arXiv:2309.11268,
+2023. 2, 5, 14, 17
+[47] Renqiu Xia, Bo Zhang, Hancheng Ye, Xiangchao Yan, Qi
+Liu, Hongbin Zhou, Zijun Chen, Min Dou, Botian Shi,
+Junchi Yan, et al. Chartx & chartvlm: A versatile bench-
+mark and foundation model for complicated chart reasoning.
+arXiv preprint arXiv:2402.12185, 2024. 2, 5, 6
+[48] Ximing Xing, Juncheng Hu, Guotao Liang, Jing Zhang,
+Dong Xu, and Qian Yu.
+Empowering llms to under-
+stand and generate complex vector graphics. arXiv preprint
+arXiv:2412.11102, 2024. 3
+[49] Zhengzhuo Xu, Sinan Du, Yiyan Qi, Chengjin Xu, Chun
+Yuan, and Jian Guo. Chartbench: A benchmark for complex
+visual reasoning in charts. arXiv preprint arXiv:2312.15915,
+2023. 2, 5, 6, 7, 14, 17
+[50] Zhengzhuo Xu, Bowen Qu, Yiyan Qi, Sinan Du, Chengjin
+Xu, Chun Yuan, and Jian Guo. Chartmoe: Mixture of expert
+10

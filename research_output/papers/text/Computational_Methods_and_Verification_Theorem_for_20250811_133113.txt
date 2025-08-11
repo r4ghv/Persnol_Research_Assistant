@@ -1,0 +1,806 @@
+COMPUTATIONAL METHODS AND VERIFICATION THEOREM FOR
+PORTFOLIO-CONSUMPTION OPTIMIZATION UNDER
+EXPONENTIAL O-U DYNAMICS
+Zhaoxiang Zhong∗
+Faculty of Science
+National University of Singapore
+e1349203@u.nus.edu
+Haiming Song
+School of Mathematics
+Jilin University
+songhaiming@jlu.edu.cn
+August 11, 2025
+ABSTRACT
+In this paper, we focus on the problem of optimal portfolio-consumption policies in
+a multi-asset ﬁnancial market, where the n risky assets follow Exponential Ornstein-
+Uhlenbeck processes, along with one risk-free bond. The investor’s preferences are
+modeled using Constant Relative Risk Aversion utility with state-dependent stochas-
+tic discounting. The problem can be formulated as a high-dimensional stochastic
+optimal control problem, wherein the associated value function satisﬁes a Hamilton-
+Jacobi-Bellman (HJB) equation, which constitutes a necessary condition for opti-
+mality. We apply a variable separation technique to transform the HJB equation to a
+system of ordinary differential equations (ODEs). Then a class of hybrid numerical
+approaches that integrate exponential Rosenbrock-type methods with Runge-Kutta
+methods is proposed to solve the ODE system. More importantly, we establish a
+rigorous veriﬁcation theorem that provides sufﬁcient conditions for the existence of
+value function and admissible optimal control, which can be veriﬁed numerically. A
+series of experiments are performed, demonstrating that our proposed method out-
+performs the conventional grid-based method in both accuracy and computational
+cost. Furthermore, the numerically derived optimal policy achieves superior perfor-
+mance over all other considered admissible policies.
+1
+Introduction
+Optimal portfolio-consumption problem is one of the most important topics in mathematical
+ﬁnance. Merton [23] proposes the fundamental stochastic control model to address this problem,
+where the stock price follows geometric Brownian motion. His work has attracted signiﬁcant at-
+tention, leading to the development of numerous models and approaches aimed at adapting to the
+stochastic nature of real-world markets. In particular, various mean-reverting models are intro-
+∗This preprint has been submitted to European Journal of Operational Research (EJOR). Please note that this version is the
+original manuscript and does not represent the ﬁnal published article. Minor reformatting and ﬁgure adjustments have been made
+compared to the version submitted to EJOR.
+arXiv:2508.06491v1  [math.OC]  8 Aug 2025
+
+A PREPRINT - AUGUST 11, 2025
+duced to the problem, driven by the discovery of mean-reverting behavior in asset prices [5, 8, 27],
+such as Ornstein-Uhlenbeck (O-U) model [34], exponential O-U model [1] and Cox-Ingersoll-Ross
+model [16]. In this paper, we will consider exponential O-U model, which effectively describes
+and simulates the general mean-reverting dynamics over time of certain asset prices.
+A variety of utility functions have been integrated into the portfolio-consumption optimization
+framework, among which the Constant Absolute Risk Aversion (CARA) utility [20, 31] and the
+Constant Relative Risk Aversion (CRRA) utility [15, 24] are the most prevalent ones. The CARA
+framework has been widely studied for its analytical tractability; however, it assumes constant abso-
+lute risk aversion, which implies a ﬁxed allocation to risky assets regardless of wealth—an assump-
+tion that contradicts empirical evidence showing wealth-dependent risk preferences. In contrast,
+CRRA utility provides a more realistic framework, as it captures how investment behavior varies
+with changes in wealth [35]. Moreover, recent studies have emphasized CRRA utility formula-
+tions featuring stochastic discounting, including non-exponential discounting [7], state-dependent
+discounting [16], and regime-switching discounting [26]. The state-dependent discounting set-
+ting, in which the discount rate explicitly depends on the underlying stock price dynamics, allows
+the model to better capture the changing risk preferences of investors in ﬁnancial markets. Over-
+all, a model that incorporates exponential O–U dynamics and CRRA utility with state-dependent
+stochastic discounting provides a more realistic and ﬂexible framework for addressing real-world
+ﬁnancial optimization problems.
+In terms of solutions, researchers have proposed a wide range of techniques to analyze optimal
+portfolio-consumption problems. Early contribution by Karatzas [13] utilizes martingale meth-
+ods to derive weak solutions. With the introduction of Hamilton-Jacobi-Bellman (HJB) equations,
+many studies have reformulated the problem into a HJB-kind nonlinear partial differential equa-
+tion (PDE) and derived closed-form solutions in 1-dimensional case [17, 25, 38]. To tackle more
+general cases, grid-based numerical schemes have been introduced, including Markov chain ap-
+proximation combined with logarithmic transformation [36], ﬁxed-point iterative methods [2], and
+hybrid Monte Carlo with ﬁnite difference approaches [32]. However, multi-asset problems involv-
+ing CRRA utility functions give rise to nonlinear high-dimensional HJB equations that are typi-
+cally intractable for closed-form solutions. Moreover, conventional grid-based numerical methods
+suffer from the curse of dimensionality when applied to such problems. To address this computa-
+tional challenge, various numerical methods have been proposed, such as sparse grid methods [30],
+Hopf formulas [6], and deep learning methods [19]. These works provide a good approximation
+of the high-dimensional value function, however, to the best of our knowledge, their numerical
+implementation can often be complex and lack rigorous veriﬁcation theorems to ensure optimality.
+In this paper, we also adopt the framework of deriving the HJB equation for the optimal con-
+trol problem. Then we apply a variable separation technique to transform the high-dimensional
+HJB equation into an ODE system, signiﬁcantly reducing computational complexity. To solve the
+resulting ODEs numerically, we develop hybrid numerical approaches that integrate exponential
+Rosenbrock-type methods [11, 18] with Runge-Kutta methods, which demonstrate superior accu-
+racy and efﬁciency. Most importantly, we derive a rigorous veriﬁcation theorem to validate the
+optimality of our approach, which is an aspect often overlooked in previous numerical methods.
+The remainder of this paper is organized as follows: In Section 2, we start with introducing the
+corresponding modeling framework of our paper. In Section 3, the HJB equation corresponding to
+the stochastic optimal control problem is derived, along with the form of the optimal policy. Then
+a variable separation technique is applied to transform the HJB equation into an ODE system. In
+2
+
+A PREPRINT - AUGUST 11, 2025
+Section 4, we introduce the numerical methods to solve the ODE system and present a convergence
+theorem. A rigorous veriﬁcation theorem is derived in Section 5. In Section 6, we conduct a series
+of numerical experiments to evaluate the performance of our algorithms. Finally, we summarize
+our ﬁndings and present conclusions in Section 7.
+2
+Problem formulation
+In this section, we introduce the modeling framework and formulate the stochastic optimal
+control problem including the constraint equations and the optimization objective.
+2.1
+Constraint Equations
+In our paper, we extend the assumptions of the ﬁnancial market model in [1] to the n-
+dimensional setting.
+Assumption 2.1. The ﬁnancial market under consideration is assumed to be arbitrage-free over
+a ﬁxed time horizon [0, T], where 0 ≤T < ∞. Let (Ω, F, P, {Ft}0≤t≤T) be a complete ﬁltered
+probability space satisfying usual conditions, and
+
+Bt =
+
+B(i)
+t
+⊤
+1≤i≤n , 0 ≤t ≤T
+
+denote the n-
+dimensional Brownian motion deﬁned on it. The market consists of n+1 tradable assets: one risk-
+free bond and n risky stocks. Within this framework, a self-ﬁnanced small investor who allocates
+wealth across these assets is considered.
+Assumption 2.2. The price P0(t) of bond is governed by following ODE:
+(
+dP0(t) = rP0(t) dt,
+0 < t ≤T,
+P0(0) = p0,
+where p0 > 0 is the initial price, r > 0 is the constant interest rate. The price Pi(t) of ith
+(1 ≤i ≤n) stock follows exponential O-U process
+(
+dPi(t) = αi(µi −ln Pi(t))Pi(t) dt + σiPi(t)dBt,
+0 < t ≤T,
+Pi(0) = pi,
+where pi > 0 is the initial price, αi, µi > 0 are constants, σ = (σij)1≤i,j≤n is the non-degenerate
+volatility matrix whose ith row is vector σi and entries are all positive.
+Assumption 2.3. A portfolio-consumption pair (π(t), C(t)) is deﬁned, where π(t) = (πi(t))⊤
+1≤i≤n
+denotes the allocation of wealth across the n stocks, with πi(t) representing the amount invested
+in the ith stock at time t. C(t) denotes the consumption rate at time t. In addition, π0(t) represents
+the amount of wealth invested in the bond at time t. Assume π(t) and C(t) are measurable and
+adapted to the ﬁltration {Ft}, with C(t) ∈[0, +∞), πi(t) ∈R, for all t ∈[0, T]. Note that for
+i = 0, 1, . . . , n, πi(t) may take negative values, indicating short-selling of the corresponding bond
+or stock.
+Remark 2.4. For analytical convenience, we let S(t) = (Si(t))⊤
+1≤i≤n, where Si(t) = ln Pi(t). By
+Ito equation [13], we have
+(
+dS(t) = diag(α)(w −S(t)) dt + σdBt,
+0 < t ≤T,
+S(0) = S0,
+(2.1)
+3
+
+A PREPRINT - AUGUST 11, 2025
+where
+diag(α) =
+
+
+
+α1
+· · ·
+0
+...
+...
+...
+0
+· · ·
+αn
+
+
+,
+w =
+
+µi + ∥σi∥2
+2αi
+⊤
+1≤i≤n
+.
+Let X(t) denotes the wealth at time t ∈[0, T]. The amount of wealth allocated to the bond
+is then given by π0(t) ≡X(t) −Pn
+i=1 πi(t). Building on equation (2.1) and Ito equation, we can
+readily derive that X(t) has following dynamics:
+(
+dX(t) = rX(t) dt + π⊤(t)(diag(α)(µ −S(t)) −re) dt −C(t) dt + π⊤(t)σdBt,
+0 < t ≤T,
+X(0) = X0,
+(2.2)
+where e is n-dimensional column vector of ones and µ = (µi)⊤
+1≤i≤n.
+2.2
+Optimization Objective
+To facilitate, deﬁne portfolio process π ≜{π(t), 0 ≤t ≤T}, consumption process C ≜
+{C(t), 0 ≤t ≤T} and corresponding wealth process X ≜{X(t), 0 ≤t ≤T}. An optimization
+objective functional is stated as
+J(π, C) ≜E
+Z T
+0
+U(t, C(t)) dt + U(T, X(T))
+
+.
+(2.3)
+The utility function U(t, c) represents the CRRA utility with a stochastic discount factor that de-
+pends on the stock price. Speciﬁcally,
+U(t, c) ≜γ−1ψ(t)1−γcγ,
+γ ∈(0, 1),
+where
+ψ(t) ≜exp
+
+−
+1
+1 −γ
+Z t
+0
+[ρ0 + S(u)⊤ρ + S(u)⊤̺S(u)] du
+
+, ρ0 ∈R, ρ ∈Rn, ̺ ∈Sn.
+(2.4)
+Here, Sn denotes the set of all symmetric n × n matrices. Next we introduce the admissible set.
+Deﬁnition 2.5. A portfolio-consumption pair process (π, C) is said to be admissible for any initial
+wealth X0, if and only if (π, C) satisfy following conditions:
+(a) E
+Z T
+0
+C(t) dt
+
+< +∞,
+(b) E
+Z T
+0
+∥π(t)∥2 dt
+
+< +∞,
+(c) E [|J(π, C)|] < +∞,
+(d) X(t) ≥0,
+∀t ∈[0, T].
+Here, ∥· ∥denotes the Frobenius norm, and we will adopt this notation throughout. The class of
+all such pairs is denoted by AX0.
+Remark 2.6. Under the conditions (a)-(b) in Deﬁnition 2.5, it guarantees that SDE (2.2) has
+unique strong solution
+X(t) = exp{rt}
+
+X0 +
+Z T
+0
+exp {−ru}
+
+π(u)⊤(diag(α)(µ −S(u) −re) −C(u)
+
+du
++
+Z T
+0
+exp {−ru} π(u)⊤σdBu
+
+.
+(2.5)
+4
+
+A PREPRINT - AUGUST 11, 2025
+Our aim is to ﬁnd the optimal portfolio-consumption pair process (π∗, C∗) within AX0 that
+maximizes (2.3) subject to the constraint (2.2).
+3
+HJB Equation and Corresponding ODE System
+In this section, we derive the HJB equation corresponding to stochastic optimal control prob-
+lem (2.2)-(2.3). We also present the optimal policy, which can be expressed in a feedback form
+through the value function. Moreover, a variable separation technique [1, 16] including power
+transformation and Feynman-Kac representation formula [14] is applied to transform the HJB
+equation to an ODE system.
+3.1
+HJB Equation and Optimal Policy
+To solve the optimal control problem in a continuous sense, value function is deﬁned as the
+maximum utility attainable starting from time t, wealth X(t) ≡x, logarithm stock price S(t) ≡S
+and discount factor ψ(t) ≡ψ. Speciﬁcally,
+V (t, x, S, ψ) ≜
+sup
+(π,C)∈Ax
+E(t,x,S,ψ)
+Z T
+t
+U(u, C(u)) du + U(T, X(T))
+
+.
+(3.1)
+Here E(t,x,S,ψ) denotes the expectation from initial state (t, x, S, ψ). Suppose that V (t, x, S, ψ) ∈
+C1,2([0, T]×R×Rn×R+), where R+ denotes the set of all positive real numbers and C1,2 denotes
+the class of functions that are once continuously differentiable in time and twice continuously
+differentiable in all state variables. Then V is a classical solution to the HJB equation (see [37,
+Proposition 3.5 of Chapter 4]), which, in the context of our problem, is given as
+∂v
+∂t + rx ∂v
+∂x + βψ ∂v
+∂ψ + LSv +
+sup
+(π,C)∈Ax
+{GxSψ v(π, C)} = 0,
+(3.2)
+where
+LSv =(w⊤−S⊤) diag(α)DSv + 1
+2tr
+
+D2
+SSvσσ⊤	
+,
+GxSψ v(π, C) =γ−1ψ1−γCγ + ∂v
+∂xπ⊤[diag(α)(µ −S) −re]
+−∂v
+∂xC + 1
+2
+∂2v
+∂x2 π⊤σσ⊤π + π⊤σσ⊤D2
+xSv,
+and
+DSv = ( ∂v
+∂Si
+)⊤
+1≤i≤n,
+D2
+SSv = (
+∂2v
+∂Si∂Sj
+)1≤i,j≤n,
+β = −
+1
+1 −γ [ρ0 + S⊤ρ + S⊤̺S],
+with terminal condition
+v(T, x, S, ψ) = U(T, x).
+(3.3)
+We denote the solution to the HJB equation by v to distinguish it from the value function V , as
+the solution may represent a broader class of functions that includes V . HJB equation (3.2)-(3.3)
+constitutes as a necessary condition for value function. A rigorous veriﬁcation theorem, which
+provides sufﬁcient conditions under which a candidate function v coincides with the value function
+V , will be derived in Section 4. When both the necessary and sufﬁcient conditions are fulﬁlled, the
+candidate function v is indeed the value function V .
+As demonstrated in Chapter 4 of [37], if V ∈C1,2([0, T] × R × Rn × R) and the sufﬁcient
+conditions for optimality are satisﬁed, solving for the supremum yields optimal policy (π∗, C∗).
+5
+
+A PREPRINT - AUGUST 11, 2025
+Therefore, we now focus on solving PDE (3.2)-(3.3) to obtain a candidate solution. To reduce the
+complexity of the HJB equation, we consider applying a variable separation technique. Following
+the idea in [38], equation (3.3) motivates the following power transformation ansatz:
+v(t, x, S, ψ) = γ−1ψ1−γxγϕ1−γ(t, S),
+(3.4)
+where ϕ(t, S) ∈C1,2([0, T] × Rn). By substituting formula (3.4) into equation (3.2)-(3.3) and
+solving the supremum in (3.2), we obtain the PDE satisﬁed by ϕ(t, S) as
+∂ϕ
+∂t + (w⊤−S⊤) diag(α)DSϕ +
+γ
+1 −γ
+
+(µ⊤−S⊤) diag(α) −re⊤
+DSϕ
++
+(
+rγ
+1 −γ + β + γ
+
+(µ⊤−S⊤) diag(α) −re⊤
+(σσ⊤)−1 [diag(α)(µ −S) −re]
+2(1 −γ)2
+)
+ϕ
++ 1
+2tr
+
+D2
+SSϕσσ⊤	
++ 1 = 0,
+(3.5)
+with terminal condition
+ϕ(T, S) = 1.
+(3.6)
+In the next step, we only have to solve PDE (3.5)-(3.6).
+Remark 3.1. Following the approach of [1], once PDE (3.5)-(3.6) has been solved and the sufﬁ-
+cient conditions for optimality are satisﬁed, one can derive the optimal policy in feedback form:
+π∗(t, X∗(t), S(t)) =
+1
+1 −γ X∗(t)(σσ⊤)−1 [diag(α)(µ −S(t)) −re]
++ X∗(t)DSϕ(t, S(t))ϕ−1(t, S(t)),
+(3.7)
+C∗(t, X∗(t), S(t)) = ϕ−1(t, S(t))X∗(t).
+(3.8)
+3.2
+ODE System
+To derive an explicit form for ϕ, we adopt the change of measure approach introduced in [1].
+Reviewing (2.2), if Novikov condition
+E
+
+exp
+1
+2
+Z T
+0
+γ2
+(1 −γ)2∥σ−1(diag(α)(µ −S(t)) −re)∥2 dt
+
+< +∞
+(3.9)
+is satisﬁed, by Gisanov Theorem [14], we can deﬁne a new probability measure ¯P under which the
+process S(t) satisﬁes
+dS(t) = diag(α)(w −S(t)) dt +
+γ
+1 −γ [diag(α)(µ −S(t)) −re] dt + σd ¯Bt.
+(3.10)
+We note that condition (3.9) is essential as it will be incorporated into the veriﬁcation theorem in
+Section 4. Assume condition (3.9) holds, we deﬁne
+H(S) =
+rγ
+1 −γ + β + γ
+
+(µ⊤−S⊤) diag(α) −re⊤
+(σσ⊤)−1 [diag(α)(µ −S) −re]
+2(1 −γ)2
+.
+Based on equation (3.10), by Feynman-Kac representation Formula, we obtain expectation repre-
+sentation of ϕ as
+ϕ(t, S) = ¯E(t,x,S,ψ)
+
+exp
+Z T
+t
+H(S(τ)) dτ
+
++
+Z T
+t
+exp
+Z u
+t
+H(S(τ)) dτ
+
+du
+
+≜ϕ1(t, S) + ϕ2(t, S).
+(3.11)
+Subsequently, we only have to solve ϕ1, ϕ2 to obtain ϕ.
+6
+
+A PREPRINT - AUGUST 11, 2025
+Lemma 3.2. ϕ2(t, S) can be written as
+ϕ2(t, S) =
+Z T
+t
+ϕ1(u, S) du.
+(3.12)
+Proof. First, we deﬁne ˜ϕ1(t, τ, S) as the function ϕ1(t, S) with the ﬁxed terminal time T replaced
+by a variable τ ∈(t, T]. We can derive that
+ϕ2(t, S) = ¯E(t,x,S,ψ)
+Z T
+t
+exp
+Z τ
+t
+H(S(u)) du
+
+dτ
+
+=
+Z T
+t
+¯E(t,x,S,ψ)
+
+exp
+Z τ
+t
+H(S(u)) du
+
+dτ
+=
+Z T
+t
+˜ϕ1(t, τ, S) dτ.
+(3.13)
+Since both the drift and diffusion terms in SDE (2.1), as well as the function H, are independent
+of time t, the system ˜ϕ1 is time-consistent. Hence, there exists a function φ(τ −t, S) satisfying
+φ(τ −t, S) = ˜ϕ1(t, τ, S).
+By equation (3.13) and setting T −u = τ −t, we have
+ϕ2(t, S) =
+Z T
+t
+φ(τ −t, S) dτ =
+Z T
+t
+φ(T −u, S) du =
+Z T
+t
+˜ϕ1(u, T, S) du =
+Z T
+t
+ϕ1(u, S) du.
+Now we only have to solve ϕ1(t, S). By Feynman-Kac Formula, the conditional expectation
+representation of ϕ1 can be equivalently formulated as the following PDE:
+∂ϕ1
+∂t + (w⊤−S⊤) diag(α)DSϕ1 +
+γ
+1 −γ
+
+(µ⊤−S⊤) diag(α) −re⊤
+DSϕ1
++
+γ
+
+(µ⊤−S⊤) diag(α) −re⊤
+(σσ⊤)−1
+diag(α)(µ −S) −re
+
+2(1 −γ)2
++
+1
+1 −γ (rγ −ρ0 −S⊤ρ −S⊤̺S)
+
+ϕ1 + 1
+2 tr
+
+D2
+SSϕ1σσ⊤
+
+= 0,
+(3.14)
+with terminal condition
+ϕ1(T, S) = 1.
+Note that H(S) is a quadratic function of S, we assume a solution ansatz for ϕ1(t, S) of this form
+[1]:
+ϕ1(t, S) = exp
+
+S⊤g(t)S + S⊤f(t) + f0(t)
+	
+.
+(3.15)
+Here
+g(t) = (gij(t))n×n : [0, T] →Rn×n,
+f(t) = (fi(t))⊤
+1≤i≤n : [0, T] →Rn,
+f0(t) : [0, T] →R.
+We can always rewrite g(t) as gs(t) + gns(t), where
+gs(t) = g(t) + g(t)⊤
+2
+,
+gns(t) = g(t) −g(t)⊤
+2
+.
+7
+
+A PREPRINT - AUGUST 11, 2025
+Since S⊤gns(t)S = 0, the non-symmetric part contributes nothing to quadratic form S⊤g(t)S.
+Hence it’s quite natural to assume that g(t) is symmetric. Combining equation (3.14) and (3.15),
+and with variable separation, we have
+g′(t) =
+1
+1 −γ diag(α)g(t) +
+1
+1 −γ g(t) diag(α) −2g(t)σσ⊤g(t)
+−γ diag(α)(σσ⊤)−1 diag(α)
+2(1 −γ)2
++
+1
+1 −γ ̺,
+(3.16a)
+f ′(t) =
+1
+1 −γ diag(α)f(t) −2g(t)σσ⊤f(t) −2g(t) diag(α)w −
+2γ
+1 −γ g(t)
+
+diag(α)µ −re
+
++
+γ
+(1 −γ)2 diag(α)(σσ⊤)−1
+diag(α)µ −re
+
++
+1
+1 −γ ρ,
+(3.16b)
+f ′
+0(t) = −w⊤diag(α)f(t) −
+γ
+1 −γ
+
+µ⊤diag(α) −re⊤
+f(t) −1
+2f ⊤(t)σσ⊤f(t) −tr
+
+g(t)σσ⊤	
+−γ
+
+µ⊤diag(α) −re⊤
+(σσ⊤)−1 [diag(α)µ −re]
+2(1 −γ)2
+−rγ −ρ0
+1 −γ ,
+(3.16c)
+with terminal conditions
+g(T) = 0n×n,
+f(T) = 0n×1,
+f0(T) = 0.
+This reduces the problem to solving the ODE system (3.16a)-(3.16c).
+Lemma 3.3. Under Assumptions 2.1, 2.2 and 2.3, g(t), f(t), f0(t) are uniformly bounded in Frobe-
+nius norm on [0, T].
+It is straightforward to verify that Lemma 3.3 follows naturally. Upon substituting t = T −t,
+the function g(t) is characterized by a ﬁnite, quadratically decreasing term alongside a linearly
+increasing term.
+Applying Gronwall’s lemma [10], we conclude that g(t) remains uniformly
+bounded in Frobenius norm over the compact interval [0, T]. Similarly, we know that the func-
+tions f(t) and f0(t) are likewise uniformly bounded in Frobenius norm on [0, T].
+Remark 3.4. Once g, f and f0 are determined, ϕ1 and ϕ can be obtained subsequently. Based on
+Remark 3.1, this ultimately allows us to derive the optimal policy.
+4
+Numerical Methods for Solving ODE System
+In this section, we focus on solving the ODE system (3.16a)-(3.16c). We present hybrid nu-
+merical approaches that integrate exponential Rosenbrock-type methods [11, 18] with Runge-Kutta
+methods to numerically solve (3.16a)-(3.16c). Moreover, the convergence theorem is established.
+We observe that (3.16a) conforms to the class of symmetric matrix Riccati equations discussed
+in [18]. It presents two numerical methods: ExpEuler, which is second-order, and Erow3, which is
+third-order. These two methods are particularly well-suited for large stiff ODEs like (3.16a), outper-
+forming standard Runge-Kutta methods in such scenarios. Therefore, we employ ExpEuler/Erow3
+to solve (3.16a). Subsequently, we apply Runge-Kutta methods to solve equations (3.16b) and
+(3.16c), as they are well-posed linear ODEs. To preserve the desired order of convergence, we em-
+ploy second-order and third-order Runge-Kutta schemes, respectively. For simplicity, we denote
+the ExpEuler method combined with the RK2 scheme by ExpEuler-RK2, and the Erow3 method
+combined with the RK3 scheme by Erow3-RK3.
+8
+
+A PREPRINT - AUGUST 11, 2025
+To facilitate a clearer presentation of our algorithms, we denote right-hand side of (3.16a),
+(3.16b), and (3.16c) by G(g(t)), F(g(t), f(t)), and F0(g(t), f(t)), respectively. And for the sake
+of completeness in the algorithmic framework, we ﬁrst revisit the numerical schemes of ExpEuler
+and Erow3, as introduced in [18]. Let h be the time discretization step size and tk = hk. For a
+given point gk in the state space, (3.16a) is rewritten as
+g′(t) = Sk(g) + Gk(g),
+where Sk(g) denotes the Frechet derivative of G(g) at gk and Gk(g) denotes the nonlinear remainder
+G(g) −Sk(g). Furthermore, exponential integrator is deﬁned as follows:
+Yj(z) =
+Z 1
+0
+exp{(1 −θ)z}
+θj−1
+(j −1)! dθ.
+Then denote the second-order and third-order approximations of g(tk) by g(2)
+k
+and g(3)
+k , respectively.
+Li et al. [18] provide following second-order ExpEuler scheme
+g(2)
+k+1 = g(2)
+k
++ hY1(hSk)(G(g(2)
+k )),
+and third-order Erow3 scheme
+ˆgk+1 = g(3)
+k
++ hY1(hSk)(G(g(3)
+k )),
+g(3)
+k+1 = ˆgk+1 + hY1(hSk)(G(g(3)
+k )) + 2hY3(hSk)
+
+Gk(ˆgk+1) −Gk(g(3)
+k )
+
+.
+Now we establish numerical schemes for f(t), f0(t). For p = 2, 3, denote the pth-order ap-
+proximations of f(t) and f0(t) by f (p)
+k
+and f (p)
+0,k, respectively. The scheme of ExpEuler-RK2 and
+Erow3-RK3 for solving f(t) takes the form of
+f (p)
+k+1 = f (p)
+k
++ h
+p
+X
+i=1
+d(p)
+i y(p)
+k,i ,
+(4.1)
+y(p)
+k,i = F
+ 
+g(p)
+k+l(p)
+i , f (p)
+k
++ h
+i−1
+X
+j=1
+m(p)
+ij y(p)
+k,j
+!
+,
+p = 2, 3.
+(4.2)
+where d(p)
+i , l(p)
+i , m(p)
+ij represents the coefﬁcients for Runge-Kutta schemes with order p. We adopt
+the coefﬁcients of the midpoint method and trapezoidal rule for the cases p = 2 and p = 3,
+respectively (see [4]). Similarly, the ExpEuler-RK2 and Erow3-RK3 scheme for solving f0(t) is
+f (p)
+0,k+1 = f (p)
+0,k + h
+p
+X
+i=1
+d(p)
+i z(p)
+k,i ,
+z(p)
+k,i = F0
+
+g(p)
+k+l(p)
+i , f (p)
+k+l(p)
+i
+
+,
+p = 2, 3.
+To establish the convergence theorem, we give following lemma ﬁrst.
+Lemma 4.1. Under Assumptions 2.1, 2.2 and 2.3, the function F(g, f) is Lipschitz continuous
+with respect to g and f, with corresponding Lipschitz constants Lg and Lf. Moreover, the function
+F0(g, f) is Lipschitz continuous in g and f, with corresponding Lipschitz constants Lg
+0 and Lf
+0.
+Proof. We present the proof for F(g, f) only, as the argument for F0(g, f) proceeds in a similar
+manner. Rewrite F(g, f) as the form of
+F(t, g, f) = Af + gBf + gC + D,
+9
+
+A PREPRINT - AUGUST 11, 2025
+with
+A = diag(α)
+1 −γ ,
+B = −2σσ⊤,
+C = −2 diag(α)w −2γ diag(α)µ −re
+1 −γ
+,
+D = γ diag(α)(σσ⊤)−1 [diag(α)µ −re]
+(1 −γ)2
++
+1
+1 −γ ρ.
+By the boundedness of functions g(t) and f(t), we have
+∥F(ˆg, f) −F(g, f)∥= ∥(ˆg −g)(B1f + C1)∥≤Lg∥ˆg −g∥,
+∥F(g, ˆf) −F(g, f)∥=
+
+
+
+(A1 + gB1)( ˆf −f)
+
+
+
+ ≤Lf∥ˆf −f∥,
+where Lg and Lf are Lipschitz constants.
+Theorem 4.2. Suppose Assumptions 2.1, 2.2, and 2.3 hold, and that the time discretization step
+size h satisﬁes
+1
+2K(K −1)hp+1 ≤CH,
+h < Cp
+Lf ,
+p = 2, 3,
+(4.3)
+where K is the number of time discretization steps, CH is a sufﬁciently small constant and Cp > 0
+is a method-dependent constant that may depend on the order p. Then ExpEuler-RK2 and Erow3-
+RK3 is globally second-order and third-order convergent.
+Proof. Under the ﬁrst assumption of (4.3), the ExpEuler and Erow3 methods achieve global con-
+vergence orders of two and three, respectively [11]. Therefore, for p = 2, 3, we have
+∥g(tk) −g(p)
+k ∥≤chp.
+Let ˆy(p)
+k,i denote the value of (4.2) by substituting g(p)
+k+l(p)
+i
+with g(tk+l(p)
+i ). Correspondingly, let ˆf (p)
+i
+denote the numerical solution computed from (4.1) substituting y(p)
+k,i with ˆy(p)
+k,i . By Lemma 4.1,
+we know that function F is Lipschitz continuous with respect to f. Additionally, by the stability
+theorem for Runge-Kutta methods in [9, Chapter 10], we have that
+∥f(tk) −ˆf (p)
+k ∥≤chp,
+under assumptions of Lemma 3.3 and the second assumption of (4.3). Then for p = 2, 3, we obtain
+error bound
+∥f(tk) −f (p)
+k ∥=∥f(tk) −ˆf (p)
+k
++ ˆf (p)
+k
+−f (p)
+k ∥
+≤∥f(tk) −ˆf (p)
+k ∥+ ∥ˆf (p)
+k
+−f (p)
+k ∥
+≤chp + ∥ˆf (p)
+k
+−f (p)
+k ∥.
+(4.4)
+where c is some positive constant determined by Lipschitz constant Lf. Throughout the paper,
+this c may change from one instance to another, depending on the speciﬁc terms involved. Denote
+10

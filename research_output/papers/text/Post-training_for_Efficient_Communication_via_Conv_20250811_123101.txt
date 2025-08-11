@@ -1,0 +1,728 @@
+Published as a conference paper at COLM 2025
+Post-training for Efficient Communication
+via Convention Formation
+Yilun Hua, Evan Wang, and Yoav Artzi
+Department of Computer Science and Cornell Tech
+Cornell University
+{yilunhua, yoav}@cs.cornell.edu, ew447@cornell.edu
+Abstract
+Humans communicate with increasing efficiency in multi-turn interactions,
+by adapting their language and forming ad-hoc conventions. In contrast,
+prior work shows that LLMs do not naturally show this behavior. We
+develop a post-training process to develop this ability through targeted fine-
+tuning on heuristically identified demonstrations of convention formation.
+We evaluate with two new benchmarks focused on this capability. First,
+we design a focused, cognitively-motivated interaction benchmark that
+consistently elicits strong convention formation trends in humans. Second,
+we create a new document-grounded reference completion task that reflects
+in-the-wild convention formation behavior. Our studies show significantly
+improved convention formation abilities in post-trained LLMs across the
+two evaluation methods.
+1
+Introduction
+Humans naturally display rapid adaptation during linguistic interactions by developing
+increasingly efficient ways to refer to concepts. This formation of ad-hoc linguistic con-
+ventions has been repeatedly observed in studies (Krauss & Weinheimer, 1964; Brennan &
+Clark, 1996; Hawkins et al., 2020a), and is a cornerstone of naturalistic human language
+interaction. It not only improves the accuracy of relaying information, but also reduces its
+costs. Contemporary large language models (LLMs), on the other hand, do not naturally
+show this behavior (Hua & Artzi, 2024).
+We propose a targeted post-training process to develop this general ability in LLMs, such
+that models spontaneously form conventions as an in-context behavior. We heuristically
+extract examples of convention formation from human corpora to construct minimal pairs,
+where the minimal difference between two paired examples is in the demonstration of
+this behavior. In addition, we enhance the reasoning process of model by introducing
+reference planning tokens, which mark when a referent is a re-mention. We treat this data
+as preference pairs for DPO-style policy optimization (Rafailov et al., 2024), and carefully
+design the optimization process to acquire generalizable convention formation ability.
+We design our evaluation process to differ from the training in both data and scenario,
+with the aim of quantifying the generalizable change in model behavior. We create two
+evaluation tasks. In the first, we follow the reference game design from cognitive science
+studies (Krauss & Weinheimer, 1964; 1966; Clark & Wilkes-Gibbs, 1986; Hawkins et al.,
+2020a), where a speaker repeatedly directs a listener to select a target from a shared set of
+items. Reference games were designed to show strong effects in humans with relatively
+short interaction and limited data. While reference games often rely on visual stimuli, we
+design a new text-only variant to avoid any confounding issues due to the visual reasoning
+abilities of models. This broadly applicable new variant shows similar trends to visual
+reference games in baseline human studies we perform. The second evaluation scenario
+we design is a document-grounded utterance completion task, rooted in scenarios where
+an assistant uses a reference document to answer a user’s questions and explain concepts.
+This task complements the reference games with a format inspired by retrieval augmented
+generation, where we assume the model is generating a response based on given references.
+1
+arXiv:2508.06482v1  [cs.CL]  8 Aug 2025
+
+Published as a conference paper at COLM 2025
+Marmalade
+Lemonade
+Soup
+Applesauce
+Soft food that is usually ground up from a fruit
+Applesauce
+Jam made of fruit commonly flavored orange
+Marmalade
+Pureed fruit
+Applesauce
+Jam
+Marmalade
+Post-training
+Reference Game Eval
+Doc-grounded Eval
+Reference Document
+&
+Reference Span
+[Conversation History]
+…
+User: Last question, what does our official 
+registered dealer sign have to be size-wise? 
+Agent: 
+: See you at [remention] the parade.
+: I’ll be co-hosting the Seattle
+  Christmas parade
+  …
+x
+y
+Planning Token SFT
+yw: See you at [remention] the parade.
+yl : See you at [remention] the Seattle
+  Christmas parade.
+Preference Optimization
+Coreference-based 
+Data Extraction
+The sign must measure at least 3 
+feet wide by 2 feet tall …
+Your sign needs to be at least 3 feet  
+wide by 2 feet tall … [✓]
+Your official registered dealer sign 
+needs to be at least 3 feet … [✘] 
+Figure 1: Overview of our framework. We propose a post-training method to improve
+LLMs’ convention formation (left) and two evaluation tasks (middle and right) covering
+different interaction scenarios and domains.
+We study several state-of-the-art proprietary and open-source LLMs and find that, even in
+the text-only domain, LLMs still lack the ability to develop ad-hoc concise referring expres-
+sions and form conventions. We apply our post-training method to the open-source models
+and observe significant improvements. The post-trained LLMs shorten their messages by up
+to 26% throughout the reference games, maintain message consistency to form conventions,
+and allow the listener to identify the target with increasing accuracy. In the document-
+grounded task, the post-trained models also outperform their off-the-shelf counterparts by
+a substantial margin. All these improvements appear even though the model is only trained
+on data from natural conversations and never on the evaluation scenarios.
+Overall, our contributions are two-fold. First, our tasks form new avenues to assess the
+communicative efficiency and adaptability of LLMs, without the potential confounding
+factor of visual stimuli. Second, we show that contemporary LLMs lack this ability for
+efficient communication, and design a post-training method to mitigate this issue. Our
+methods lay a foundation for research to further improve LLMs’ convention formation
+and communication efficiency. Our code is available at https://github.com/lil-lab/
+post-train-for-efficient-communication.git.
+2
+Background and Related Work
+Repeated Reference Games
+Repeated reference games with visual stimuli are widely
+used to study human convention formation (Krauss & Weinheimer, 1964; 1966; Clark &
+Wilkes-Gibbs, 1986; Hawkins et al., 2020a). A standard repeated reference game involves a
+speaker and a listener interacting over many trials and a recurring set of referents (images).
+In each trial, a target referent is revealed only to the speaker, who needs to produce a
+description to guide the listener to select the target. The two participants see the referents in
+different orders and cannot use the position information in their referring expression (e.g.,
+cannot say pick the first item). After each trial concludes, the speaker sees the item selected by
+the listener and the listener knows if their selection is correct. As the participants complete
+more trials together, the same referent will repeatedly appear as the target. This has been
+observed to lead the speaker to use increasingly efficient language, the listener to become
+increasingly accurate in identifying the target. Hua & Artzi (2024) adapts the repeated
+image reference games for multimodal LLM evaluation. They show that multimodal LLMs
+struggle with developing more concise referring expressions as the speaker, but achieve
+near-human performance as listeners. Therefore, they use GPT4 as the listener to automate
+the evaluation of LLM speakers, a design choice we also adopt.
+2
+
+Published as a conference paper at COLM 2025
+Convention Formation
+Humans are inclined to minimize the effort used in communi-
+cation, both the effort one spends to articulate a piece of information and the effort their
+partner needs to understand it (e.g., Zipf, 1949; Gibson et al., 2019; Yin et al., 2024). This
+principle is widely observed in conversations, in the form of convention formation (Krauss
+& Weinheimer, 1964; 1966; Clark & Wilkes-Gibbs, 1986; Hawkins et al., 2020a; Haber et al.,
+2019), when the referring expression for the same item shortens and the two interlocutors
+arrive at a mutually understood, concise expression that they will stick to for the rest of the
+interaction. Importantly, the expression for an item quickly becomes consistent – a speaker
+usually keeps dropping words from their message but rarely introduces new words to refer
+to the same item (Hawkins et al., 2020a). Hua & Artzi (2024) observed that LLMs do not
+exhibit this trend. Bringing about this property of convention formation is a critical part of
+our objective.
+Learning for Language Adaptation in Agents
+Prior works on systems that adapt their
+language for efficient communication have primarily focused on training models for a fixed,
+specific interaction task and using data from the task. Hawkins et al. (2020b) applies a
+continual learning method to elicit language shortening within repeated reference games.
+Takmaz et al. (2020) trains a model on data from an image reference task, PhotoBook (Haber
+et al., 2019), and shows that models trained to ground on the image and conversation history
+can generate more efficient referring expressions for this task. Similar paradigms have
+also been adopted to study models’ adaptation to interlocutors with different background
+information in reference games (Greco et al., 2022). In contrast, our goal is to train a
+general-purpose LLM that can show general language efficiency adaptation, whether in a
+highly controlled lab-like game scenario or scenarios close to how these models are used in
+production. Importantly, using only the data extracted from natural human conversations,
+our post-training method significantly improves LLMs’ convention formation ability in the
+repeated reference game, even though we do not train them on this specific task format.
+3
+Post-training for Ad-hoc Convention Formation
+We propose a post-training method that includes several stages: (a) constructing preference
+data from heuristically identified examples of convention formation in human conversations;
+(b) adding a special planning token to enhance explicit reasoning about references; and (c)
+policy optimization using the preference pairs. Throughout, we design learning to preserve
+the model’s general capabilities. Appendix B includes additional implementation details.
+Preference Data Construction
+We use a coreference resolution (Bagga, 1998) model on
+scripts of TV series, a domain of text that is rich with conversational interaction, to identify
+repeating instances of convention formation, and modify the data to create preference pairs.
+Coreference resolution generates reference chains, where mentions that refer to the same
+entity appear in their order in the text. Such chains often display convention formation,
+with later references being shorter and more consistent.
+We heuristically identify examples where a concept is initially referred to (i.e., mentioned)
+with a noun phrase in an utterance i and is re-mentioned in a later utterance j with a more
+concise referring expression. Each such example may also include intermediate re-mentions,
+meaning that the re-mention in utterance j is not the first re-mention. Therefore, each
+reference chain can provide multiple demonstrations. This is important because it shows to
+the model that the desired behavior is not only in the first re-mention, but persists over the
+entire reference chain.
+We use this data to construct triples of (x, yw, yl), where x is the conversational context (i.e.,
+the history of the interaction), yw is the preferred continuation, and yl is the dis-preferred
+continuation. We set x to be the conversation history until a reference, and yw and yl to
+represent desired and undesired utterance to contain the reference. We create two types of
+preference pairs. The first type is a demonstration of the observed convention behavior. We
+set yw to be the observed re-mention text, which reflects convention formation, and yl to use
+the more verbose first-mention text as the re-mention. This aims to suppress the behavior
+of simply repeating mentions verbatim, and encourage adjusting them as expected when
+3
+
+Published as a conference paper at COLM 2025
+conventions can be formed. The second type aims to preserve how the first mentions are
+generated, because the model must avoid a faux conventionalization behavior in the first
+mention, where it has no shared common ground. We set yw to the original first mention,
+and yl to the conventionalized re-mention that was observed in utterance j. We extract the
+first type of pairs from reference chains of at least two re-mentions, to better demonstrate
+the convention formation process. For the second type, we extract from reference chains of
+at least one re-mention. We process 2,000 TV scripts from Chen et al. (2022), and the total
+numbers of extracted first and second types of pairs are 11,106 and 10,135 respectively.
+Adding Mention Planning Tokens
+We further modify the preference pairs to explicitly
+reflect the distinction between mentions and re-mentions using a special token: re-mentions
+are preceded by a [remention] token. We expect this explicit marking to allow the model
+to better separate its treatment of initial and later mentions. This separation could allow
+the model to develop convention formation skills, without hurting how initial mentions are
+generated. Beyond adding the new token to existing preference pairs where appropriate,
+we also create new preference pairs focused on training the model to use this token. We add
+triplets (x, yw, yl), where if yw captures a re-mention, then yw contains the corresponding
+planning token and yl does not. Conversely, if yw captures a first-mention, then yw does
+not contain the planning token and yl contains a misplaced planning token preceding the
+first-mention. Empirically, we observe the planning token to help (Section 6). Figure 9 in
+Appendix E.1 shows an example training instance.
+Regularized SFT for Planning Token Learning
+We precede preference optimization
+with a supervised finetuning (SFT) phase to help the model use the [remention] token
+properly. Given a training preference pair for a re-mention (x, yw, yl), we construct a new
+SFT input-output pair (x, yw), where yw is the target utterance with the special planning
+token [remention] inserted before the re-mention. To account for the new [remention],
+we extend the input and output embedding tensors of the LLM as needed. We design the
+training process carefully to learn the planning tokens while avoiding overfitting. Instead
+of the standard cross-entropy language modeling loss, we calculate the cross-entropy loss
+on the planning tokens only and calculate a regularization loss on the rest of the tokens. Let
+N be the set of all tokens in y, M be the set of planning tokens in y, our loss for a training
+instance (x, y) is1
+LSFT = −1
+|M| ∑
+t∈M
+log πθ(yt|y<t, x) +
+1
+|N| −|M| ω ∑
+t̸∈M
+DJSD(πθ(yt|y<t, x)||πref(yt|y<t, x))
+(1)
+s.t. DJSD(πθ||πref) = 1
+2DKL(πθ|| πθ −πref
+2
+) + 1
+2DKL(πref|| πθ −πref
+2
+) ,
+where ω is the regularization coefficient. πref is the original weights of the model. DJSD
+is the Jensen-Shannon divergence (JSD), which is a symmetric and bounded alternative to
+KL-divergence. We empirically observed that JSD provides more stable learning.
+Preference Optimization
+We use all preference data (x, yw, yl) for this training stage. we
+use the APO-zero loss (D’Oosterlinck et al., 2024), which directly encourages an increased
+winning example likelihood and a decreased losing example likelihood. We opt for APO-
+zero over the standard DPO loss (Rafailov et al., 2024), because DPO has been shown to
+sometimes cause the winning example likelihood to decrease during training and thereby
+hurts the performance, an issue known as likelihood displacement (Pal et al., 2024; Razin
+et al., 2025). The minimal difference between our preference pairs (i.e,. by a single noun
+phrase or re-mention token) is a known cause to likelihood displacement. Our loss for this
+training stage is:
+LAPO = −σ (rθ(x, yw)) + σ (rθ(x, yl)) ,
+(2)
+where rθ(x, yw) = β log πθ(y|x)
+πref(y|x) and β is a hyperparameter similar to DPO’s β.
+1We use a somewhat non-conventional set notation here because it simplifies the overall notation,
+and does not require testing for [remention] tokens in the objective.
+4
+
+Published as a conference paper at COLM 2025
+4
+Evaluation Tasks
+We design our evaluation tasks to be separate and distinct from our training regime, with
+the aim of assessing general abilities beyond the training data. Figure 1 illustrates the
+two evaluation tasks. The two tasks approach the evaluation in different ways, and are
+complementary to each other.
+4.1
+Text-only Reference Game
+Reference games with visual stimuli are commonly used to study convention formation in
+human interaction (Krauss & Weinheimer, 1964; 1966; Clark & Wilkes-Gibbs, 1986; Hawkins
+et al., 2020a) and more recently in multimodal LLMs (Hua & Artzi, 2024). We create a
+new text-only variant, loosely inspired by the Taboo game.2 The dynamics are identical to
+conventional reference games. There are two participants: a speaker and a listener. They
+both observe a set of potential referents (i.e., as context). At each turn, the speaker is asked
+to describe a target for the listener to select. The turn ends successfully if the listener selects
+the right target. Otherwise, it ends with a failure. Instead of images, we design the set of
+potential referents to be textual names of everyday items. To avoid the degenerate behavior
+of simply copying the word or part of it (e.g., using pan to refer to dustpan), we restrict the
+use of the word and its lexemes. For example, a valid message for the target dustpan can be
+the flat, rectangular thing with the handle that you sweep into, but not the pan.
+Similar to image reference games, we use a repeated version of the game to study convention
+formation, where each interaction includes multiple turns with repeated targets. Figure 10
+and Figure 16 in Appendix E.1 show an example model query and messages evolving as the
+interaction progresses in our reference game. This evaluation task uses a relatively synthetic
+interaction scenario, but aims to emphasize the behavior we aim to study, so measurements
+of trends are clear and significant.
+We follow prior work to evaluate convention formation, including tracking utterance
+length (e.g., Hawkins et al., 2020a;b) and tracking message consistency with word nov-
+elty distance (WND; Hua & Artzi, 2024), which tests the lexical stability of consecutive
+references to the same item (i.e., if new words are introduced). In our experiments, we con-
+duct human studies and confirm that the scenario elicits the expected convention formation
+trends in human interaction (Section 6, gray curves in Figure 2). Indeed, human text-only
+games show trends similar to those observed in image-based games: turn success increases,
+utterance length decreases, and WND decreases.
+We extract candidate referents from a dataset of Taboo games.3 We create challenging refer-
+ence sets by sampling related items by clustering similar words using their embeddings.4
+Each set includes four referents. A similar method for constructing challenging reference
+sets was used for image-based reference games (Hawkins et al., 2020b). We extract 47
+referential contexts for evaluation and adopt the same game length as prior studies: 24 turns
+(trials) organized into six repetitions. Each repetition includes a turn for each item in the set.
+4.2
+Document-grounded Utterance Completion
+The second task is based on the Doc2Dial dataset (Feng et al., 2020), where a user is querying
+an agent in a document-grounded interaction. At each step, the user asks a question, and the
+agent responds based on the document. Doc2Dial interactions also include the span of text
+in the document used to produce each agent utterance. As with other human interactions,
+Doc2Dial dialogues show convention formation when referents are repeated.
+Our task requires the model to complete the response of a single turn in a Doc2Dial in-
+teraction. The model is given both a snapshot of a human conversation transcript at a
+specific turn following a user question and the text span from the document that contains
+2https://en.wikipedia.org/wiki/Taboo (game)
+3https://github.com/Kovah/Taboo-Data
+4We use the OpenAI text-embedding-3-small embedding model.
+5
+
+Published as a conference paper at COLM 2025
+the information to the answer. The model is expected to generate the answer, based on the
+document, the reference span, and the history of the interaction. Figure 11 in Appendix E.1
+provides an example input. If the target re-mention phrase is not in the beginning of the
+original human agent response, we pre-fill the model’s generation with the first part of the
+human response such that the model would generate from where the re-mention phrase
+would start. Appendix B provides more implementation detail.
+We create the test instance by processing the Doc2Dial dialogues similar to how we prepare
+the training data in Section 3. We extract examples where the assistant refers to a previously
+mentioned concept with a more concise expression, at least two words shorter. This process
+generates a total of 481 evaluation instances. This scenario is closer to our training setup,
+but the interaction data differs significantly. While we use TV scripts to create our training
+data, Doc2Dial includes information-seeking interactions in four specific domains (social
+security, veterans affairs, motor vehicles, and public health).
+We evaluate model performance as win-rate against another model or human ground truth.
+The win-rate is computed using a GPT-4o judge that is instructed step-by-step to parse
+the two utterances and judge if the utterance produced by the evaluated LLM uses more,
+less, or equally concise referring expressions compared to the counterpart model or human
+utterance. Figure 12 in Appendix E.1 shows the GPT-4o judge prompt. Appendix B presents
+more implementation details and the GPT judge’s agreement with human annotation.
+The document-grounded utterance completion evaluation differs significantly from the
+text-based reference game task. It does not include repeated interactions, and therefore does
+not evaluate interaction trends. Instead, it examines the behavior in more realistic scenarios,
+where the context (i.e., the document and the interaction history) is more complex.
+5
+Experimental Setup
+Text-only Reference Games
+We automate our evaluation by using GPT4o-mini as the
+listener, which is efficient to run, has a low cost, and shows similar performance to human
+listeners based on our pilot study (Appendix A) and prior work (Hua & Artzi, 2024).
+As part of our experiments, we collect human interaction data to quantify how our new
+setup elicits convention formation in human speakers. We use the crowd-sourcing platform
+Prolific, and collect 200 interactions with human speakers and GPT4o listeners. We design
+the instruction and format of the study such that the human participants do not know they
+are interacting with a model, thus eliciting more natural human behaviors. The only goal for
+the participants is to help the listener identify the target correctly, and a participant receives
+a monetary bonus every time their partner successfully identifies the target. We pay 2.6
+USD per interaction, with a bonus of 0.03 USD for each successful turn.
+To minimize potential priming effects, the instructions for the participants do not mention
+“adaptation” or “communication efficiency”, and the participants can only complete the in-
+teraction once. A side-effect of this light instruction is that some participants misinterpreted
+the instruction, and concluded that they are required to change their referring expressions
+between turns. Naturally, this led to an increase in WND and sabotaged the creation of
+conventions. We identify this group by fitting Gaussian mixture models (GMM) on the
+WND scores. We remove the low-consistency component (35.5% of the participants), and
+only use the remaining users for evaluation. This latter group displays clear trends of
+convention formation, the behavior we aim for our models to emulate. We further discuss
+our human studies in Appendix A.
+Models
+We evaluate Claude-3.5-sonnet, GPT4o, Gemma-2-9b-instruct, and Llama-3.1-8b-
+instruct. We apply our post-training to the open-weight models, Gemma and Llama.
+Training
+We use the coreference resolution model from Zhang et al. (2023) to prepare
+the data. We use LoRA for both the SFT and APO stages. In the SFT stage, we addition-
+ally update the embeddings of the added token while keeping the original vocabulary’s
+embeddings frozen. Appendix B provides hyperparameters and implementation details.
+6
+
+Published as a conference paper at COLM 2025
+1
+2
+3
+4
+5
+6
+20
+30
+40
+50
+60
+70
+Msg Len (chars)
+1
+2
+3
+4
+5
+6
+0
+1
+2
+3
+4
+5
+6
+7
+Repetition #
+WND
+1
+2
+3
+4
+5
+6
+75
+80
+85
+90
+95
+100
+Acc (%)
+Gemma (original)
+Gemma (ours)
+Llama (original)
+Llama (ours)
+GPT4o
+Claude-3.5
+Human
+Figure 2: Reference game results. Shaded areas are bootstrapped 95% confidence intervals.
+Ablations
+We experiment with several ablations, using the same training schedule and
+hyperparameter search as our post-training method whenever possible: (a) APO only:
+APO-zero training on the preference data directly, no planning tokens or SFT updates are
+used; (b) SFT: SFT on the inputs and target completions from the SFT stage (Section 3), but
+with planning tokens removed and using a standard language modeling loss; (c) Ours w/o
+planning tokens: standard SFT and language modeling loss to initialize the model with a
+small number of updates and then adopt APO training; and (d) Ours w/o JSD: standard
+SFT on the input and target utterances that include the planning tokens, without adding
+the JSD loss, and with standard language modeling loss calculated on all the tokens of the
+target output, followed by the same APO training stage as our main method.
+6
+Results
+We observe significant deficiencies in convention formation in all the off-the-shelf models
+we evaluate across both evaluation testbeds. Our post-training treatment significantly
+improves convention formation behavior. Figure 2 shows convention formation trends on
+the reference game scenario, Table 1 provides the grounded-document scenario results, and
+Appendix C provides ablation analysis.
+6.1
+Text-only Reference Games
+Figure 2 shows the results for the reference game evaluation, where we report the average
+message length in characters, Word Novelty Distance (WND), and average accuracy across
+the six repetitions of the interaction. All off-the-shelf LLMs fail to form conventions or
+improve their communication efficiency. They often increase message lengths over time and
+introduce new words to refer to repeated items, degrading consistency (higher WND).
+Our post-trained models show statistically significant improvement in language efficiency.
+Gemma (ours) shortens its messages by 26% (42.1 characters →31.0 characters) from
+Repetition 1 to Repetition 6 and Llama (ours) by 14% (48.4 characters →to 41.6 characters).
+The post-trained models are also substantially more consistent. Their WNDs consistently
+decrease as the game progresses, reaching below 1 at the end of the interaction. This means
+that the post-trained models’ messages gradually stabilize and conventionalize.
+We observe that a small accuracy gap exists between post-trained and original models
+in Repetition 1. Interestingly, this gap makes the post-trained models’ accuracies closer
+to that of humans at Repetition 1. More importantly, the post-trained models’ accuracies
+improve over time while their messages shorten, eventually using substantially more concise
+language to achieve accuracies close to the original models.
+The human convention formation trends we observe validate our new text-based reference
+game setup, and closely follow trends observed in past work using visual stimuli (Hawkins
+7
+
+Published as a conference paper at COLM 2025
+Post-trained vs. Original
+# Wins
+Competence
+Ours
+Original
+Tie
+Cannot Decide
+Compet. Rate (%)
+Gemma
+121
+45
+299
+16
+-
+Llama
+135
+46
+291
+9
+-
+LLM vs. Human
+# Wins
+Competence
+LLM
+Human
+Tie
+Cannot Decide
+Compet. Rate (%)
+Gemma (ours)
+109
+97
+259
+16
+79.1
+Gemma (original)
+88
+130
+244
+19
+71.9
+Llama (ours)
+90
+114
+257
+20
+75.3
+Llama (original)
+83
+160
+227
+11
+66.0
+Claude
+76
+168
+220
+17
+63.8
+GPT
+73
+192
+203
+13
+59.0
+Table 1: Document-grounded utterance completion main results. We report win-rate com-
+pared to humans and the original off-the-shelf model. In rare cases, one model mentions a
+different concept than the other does or fails to re-mention any concepts. In this case, the
+GPT4o judge would output “cannot decide.”
+et al., 2020a;b). This demonstrates that our formulation is a fitting interaction scenario to
+study convention formation, not only in models, but also in humans.
+Overall, the results show a significant increase in the alignment between model and human
+behavior. Humans still show better communication efficiency improvement than any LLM,
+eventually reaching 17.3 characters and 0.38 WND. The remaining gap indicates the problem
+is not completely solved, despite the significant improvement by our method. Appendix E.2
+presents examples of successful convention formation as well as negative examples.
+6.2
+Document-grounded Utterance Completion
+Table 1 reports the utterance completion results. In addition to the GPT4o-judged win rate,
+we also report the competence rate, a single number for quick comparison:
+competence rate (%) =
+# model wins + # ties
+# model wins + # ties + #human wins
+(3)
+To compare a specific post-trained model and its off-the-shelf counterpart, we conduct
+pairwise evaluation on them and directly look at how often one model wins or ties with the
+other model. This allows for a more finegrained comparison because a post-trained model
+may show greater shortening than the original model, but the human utterance shows even
+more shortening. These instances will not be reflected by the models’ competence rates,
+which are based on win and tie rates with humans.
+Compared with the original models, our post-trained models more often use a more concise
+referring expression as the re-mention than the other way around. Llama shows the greatest
+improvement; the post-trained model wins in 135 instances and the original model only
+wins in 46 instances. The gaps between the post-trained and original models are statisti-
+cally significant with p < 0.01 under a sign test. Our post-trained models’ wins are also
+substantially closer to humans’ than the original ones, and achieve higher competence rates.
+The weak performance of off-the-shelf models suggests that contemporary LLMs are subop-
+timal in adapting their language for efficient communication. This result further supports
+our conclusions from the lab-like setting of reference games and manifests these models’
+issues in a scenario closer to how LLMs are used in production.
+6.3
+Additional Experiments and Analyses
+Ablations and Prompting-based Attempts
+We also experiment with ablating the
+[remention] tokens, Jensen-Shannon Divergence (JSD) Loss, and the SFT stage. The experi-
+ments show that all these components are necessary for the model to learn generalizable con-
+vention formation abilities and achieve balanced improvements across tasks. Appendix C
+discusses our ablation studies in detail.
+8
+
+Published as a conference paper at COLM 2025
+Model
+∆MixEval (%)
+Gemma (ours)
++0.2
+Llama (ours)
+-0.8
+Nvidia Nemotron
+-6.3
+Mazzaccara et al. (2024)
+-1.5
+Table 2: Impact of post-training on general LLM capabilities, as measured in MixEval-hard
+score change.
+% of Occurrence
+Drop Phrase
+Rephrase
+New Feature
+Human
+66
+19
+15
+Gemma (ours)
+62
+11
+26
+Llama (ours)
+43
+35
+21
+Table 3: Language strategies of efficiency adaptation in the reference games.
+Additionally, we experiment with eliciting convention formation with prompting. Hua
+& Artzi (2024) has shown that prompting is not a satisfactory solution to the convention
+formation problem, with their results from image-reference games. We conduct similar
+prompting experiments with our text-only tasks. Overall, our conclusions are similar.
+Prompting and few-shot examples do not work well in eliciting convention formation.
+Appendix D presents the results of these experiments.
+Preserving the LLM Capabilities
+We evaluate our models on MixEval-hard (Ni et al.,
+2024), a benchmark for general LLM capabilities, which consists of diverse tasks and has
+state-of-the-art correlation with human judgment. We calculate the change in MixEval
+score (an accuracy-based score out of 100) after post-training. We find that our approach
+led to no degradation on Gemma, and only a small decrease of 0.8 on Llama. To better
+interpret the magnitude of this decrease, we additionally evaluate two other post-trained
+models and compute their MixEval score changes. Importantly, because we just focus
+on enhancing model’s convention formation ability, our method is not comparable with
+common post-training works that intend to enhance model’s general abilities and cover
+diverse datasets/tasks. Instead, we compare with post-training interventions that are
+intended to add or enhance specific skills. We compare against Nvidia Nemotron Nano,5 a
+post-trained version of Llama-3.1-8b-instruct, where the post-training aims to enhance the
+math and reasoning capabilities. We also compare with the model from Mazzaccara et al.
+(2024), who post-train a Llama-2-7b-chat to enhance its ability to ask informative questions.
+Compared to post-training interventions for these models, our method does not cause a
+substantial performance decrease (Table 2).
+Analysis of Language Characteristics of Adaptation
+We analyze humans’ and post-
+trained LLMs’ language changes from one repetition to another in 30 reference games, and
+identify three categories of adaptation behaviors. Table 3 presents the results. The most
+common strategy for both humans and the post-trained LLMs is to remove a phrase from
+the previous message while keeping the rest of the message the same (“Drop Phrase”).
+The removed phrase is oftentimes a prepositional phrase or a clause. Another strategy is
+rephrasing, using a concise expression to replace part or all of a message while conveying a
+similar meaning. For example, the referring expression for a waterbed can change from the
+mattress that is filled with liquid to the liquid-filled mattress. Finally, both humans and LLMs
+sometimes replace the previous description by describing a new feature that is more concise.
+For example, a hammer can be initially described as the tool that is used to fix things around the
+house and later as the tool that is used to build things. These analyses show that humans and
+LLMs share similarities in the strategies they use, though LLMs’ more frequent use of new
+features and/or rephrasing likely contributes to their slightly lower language consistency
+compared with humans (as their WNDs show).
+5https://huggingface.co/nvidia/Llama-3.1-Nemotron-Nano-8B-v1
+9
+
+Published as a conference paper at COLM 2025
+% of Words Reduction
+NOUN
+VERB
+ADJ
+ADP
+PRON
+Human
+15
+13
+7
+14
+18
+Gemma (ours)
+18
+14
+33
+8
+0
+Llama (ours)
+34
+8
+24
+16
+-3
+Table 4: Reduction of POS counts from Repetition 1 to Repetition 6 in the reference games
+(percentage of the total word reduction). Negative value means the count increased.
+Additionally, we examine how the numbers of common POS tags change for models and
+humans over repetitions in the reference games (Table 4). For all systems, we see substantial
+reduction in the number of nouns, verbs, and adpositions. Notably, the reduction in adjective
+counts accounts for a larger proportion of the overall length reduction in Gemma. This
+is because the original Gemma model would start the game with longer messages that
+contain more adjectives than humans. Because our post-training is not intended to alter the
+model behavior for initial mentions, the post-trained model’s messages still often contain
+adjectives in Repetition 1 (average adjectives count: 1.5). Humans, however, start with
+relatively concise language with only an average of 0.5 adjectives in Repetition 1. Another
+difference is that human messages more often contain pronouns in early repetitions, which
+are then dropped later (pronoun count in Repetition 1: 0.7 (human), 0.5 (Gemma)). For
+Llama, the shortenings in nouns accounted for a greater proportion (34%) of reduction, also
+because the post-trained Llama (just like the original Llama) started the interaction with
+more nouns than humans did (average noun counts: 2.7 (Llama), 1.5 (Human)).
+7
+Conclusion, Future Work, and Limitations
+We introduce a post-training method for LLMs to acquire convention formation abilities and
+thereby improve their naturalness and communication efficiency in multi-turn interactions.
+We also design two text-only tasks to evaluate convention formation, without the poten-
+tial confounding factor of visual stimuli present in prior work. We show that convention
+formation for efficient communication is a general challenge to state-of-the-art LLMs. Our
+post-training method effectively exploits the naturally occurring examples of convention-
+alization from human data. We observe significant improvements in model behavior, as
+reflected in evaluation scenarios that are distinct from the training data. We hope our work
+will encourage further research to improve LLMs’ adaptation for communication efficiency.
+Our work leaves various open problems, and points to potential directions for future work.
+We experiment with our approach in isolation. An important future direction is to integrate
+this intervention into the complete LLM post-training process, so that convention formation
+is acquired alongside the general skills acquired in post-training. Future work can also
+study the impact of this change on the broader set of post-training goals.
+Critically, it is important to consider the incentives of human speakers when they form
+conventions: reduction of costs and increasing of utility. Models have no awareness of
+these considerations, and instead they learn the data distribution better through our process.
+Reasoning about cost and utility explicitly is an interesting direction for future work.
+While our tasks avoid the potential issues of visual stimuli, they are intended to complement,
+not to replace, image reference games. Image referents in prior work cover diverse domains
+and levels of details (e.g., Hua & Artzi, 2024; Eliav et al., 2023), likely influencing language
+styles and adaptation. Future work can study the behavior differences under these settings.
+Despite the significant improvements we demonstrate, our post-trained LLMs still do not
+show the same level of convention formation as humans. Closing the gap further is an
+important future work direction. Our evaluation benchmarks will enable this effort.
+Finally, we focus on a special type of adaptation (i.e., convention formation). This is not the
+only way interlocutors adapt ad-hoc to make interactions more efficient and successful. For
+example, a speaker may sometimes want to switch (back) to more elaborate language, upon
+seeing the listener’s confusion. We hope future work expands upon this set of behaviors.
+10

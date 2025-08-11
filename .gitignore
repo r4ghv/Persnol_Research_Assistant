@@ -1,0 +1,57 @@
+###############################
+# Python
+###############################
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.python-version
+.pytest_cache/
+.coverage*
+htmlcov/
+
+###############################
+# Environments
+###############################
+venv/
+.venv/
+env/
+.env
+.conda/
+*.env.local
+
+###############################
+# IDE / Tools
+###############################
+.vscode/
+.idea/
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+.cursor/
+
+###############################
+# Logs & caches
+###############################
+logs/
+.cache/
+.gradio/
+.embedchain/
+.mem0/
+
+###############################
+# Project outputs (keep text summaries, ignore bulky PDFs)
+###############################
+research_output/papers/pdf/
+research_output/**/.DS_Store
+research_output/**/Thumbs.db
+
+###############################
+# Build / packaging
+###############################
+build/
+dist/
+*.egg-info/
+
+

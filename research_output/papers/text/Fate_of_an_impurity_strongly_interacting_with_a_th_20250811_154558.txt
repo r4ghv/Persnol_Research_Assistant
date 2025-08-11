@@ -1,0 +1,746 @@
+Fate of an impurity strongly interacting with a thermal Bose gas
+Jiˇrí Etrych1, Sebastian J. Morris1, Simon M. Fischer1, Gevorg Martirosyan1, Christopher J. Ho1,
+Moritz Drescher2, Manfred Salmhofer2, Zoran Hadzibabic1, Tilman Enss2, and Christoph Eigen1,∗
+1 Cavendish Laboratory, University of Cambridge, J. J. Thomson Avenue, Cambridge CB3 0HE, United Kingdom
+2 Institut für Theoretische Physik, Universität Heidelberg, 69120 Heidelberg, Germany
+We spectroscopically study mobile impurities immersed in a homogeneous bosonic bath (a box-trapped Bose
+gas), varying the bath temperature and the strength of impurity-bath interactions. We compare our results to
+those for a quasipure Bose–Einstein condensate (BEC), and find that for strong impurity-bath interactions, the
+spectra narrow with increasing temperature, while the impurity energy shift is suppressed. Near the critical
+temperature for condensation, many-body effects still play an important role, and only for a nondegenerate bath,
+the system approaches the classical Boltzmann-gas behavior. The key spectral features are reproduced within
+the theory of an ideal Bose polaron.
+An impurity immersed in a quantum bath is a funda-
+mental setting in many-body physics that, in spite of its
+apparent simplicity, features complex emergent behavior.
+A key simplification often lies in treating the impurities
+dressed by the excitations of the bath as polaron quasipar-
+ticles. This notion originates from descriptions of electrons
+moving through a polarizable crystal [1, 2], but nowadays
+extends to numerous scenarios in condensed matter physics
+and beyond [3, 4].
+In cold-atom experiments, impurity physics can be stud-
+ied in highly imbalanced two-component mixtures, where
+the minority component acts as impurities and the major-
+ity component as the bath [5–8]. A key advantage of these
+experiments is the high degree of tunability: the bath den-
+sity n and temperature T are readily controllable, and the
+strength and sign of the impurity-bath interactions, charac-
+terized by the s-wave scattering length a, can be tuned us-
+ing Feshbach resonances. In the high-temperature regime,
+the mixture can be described as a classical Boltzmann gas,
+and the thermal de Broglie wavelength λ ∝1/
+p
+T sets the
+relevant interaction parameter a/λ.
+Instead, in the low-
+temperature regime, the impurity behavior depends on the
+quantum statistics of the bath, and is generally governed by
+the interaction parameter kna, where kn = (6π2n)1/3 [5–8].
+For a fermionic bath, long-lived attractive and repulsive
+polaron quasiparticles exist for temperatures well below the
+Fermi temperature [9, 10], but the quasiparticle description
+breaks down as T is increased [11]. The situation is more
+intricate for a bosonic bath: in the limit of vanishing intra-
+bath interactions, there is no overlap between the ground
+state of the system with and without the impurity; this is
+known as the bosonic orthogonality catastrophe [12, 13].
+When the bath is weakly repulsive and the reduced tem-
+perature T /Tc ≪1, where Tc is the critical temperature for
+Bose–Einstein condensation, well-defined attractive and re-
+pulsive polarons exist at sufficiently low a [14, 15], but
+in the strongly interacting regime the quasiparticle picture
+breaks down and the spectra are intrinsically broad [16].
+The fate of the system at finite T, including the effect of
+the BEC phase transition, is subject to ongoing theoreti-
+cal debate [17–22], with previous experiments limited to
+strong attractive interactions [23]. Furthermore, in contrast
+to fermions, strongly interacting bosons are unstable due to
+three-body loss (due to the absence of Pauli blocking), mak-
+ing it challenging to investigate their equilibrium properties.
+In this Letter, we study impurities injected into a
+box-trapped Bose gas, mapping out the impurity spec-
+trum across the strong-coupling regime for different T /Tc.
+We compare our measurements to those obtained for a
+quasipure BEC [16], and find that the spectral shift in a ther-
+mal gas is suppressed compared to the BEC and, counter-
+intuitively, near unitarity the spectra narrow with increasing
+T. Near Tc, the spectra retain clear many-body character,
+with three key signatures: (i) the spectral shifts and widths
+are set by the energy scale En = ℏ2k2
+n/(4mr), where mr is
+the reduced mass of an impurity and a bath atom, (ii) the
+attractive branch extends across the resonance, and (iii) the
+spectral width is asymmetric in 1/(kna), reaching a maxi-
+mum value for 1/(kna) ≈0.4. For higher T /Tc, the system
+approaches the Boltzmann-gas regime: the attractive and
+repulsive spectral branches connect across the resonance,
+and the width is symmetric in λ/a, reaching its maximum
+(unitarity-limited) value at λ/a ≈0. Throughout, we com-
+pare our results to bosonic functional determinant approach
+(FDA) calculations for an ideal Bose polaron [22], finding
+excellent qualitative agreement.
+Our experiments are performed using a gas of 39K atoms
+in an optical box trap [24–26] of volume V = 3.3(7) ×
+104µm3, initially spin-polarized in the |F,mF 〉= |1,−1〉
+state, here denoted as |↑〉.
+We prepare thermal samples
+with T /Tc up to ≈4, varying both the temperature and the
+density of the sample [27]. As illustrated in Fig. 1(a) and
+following [16], we perform rf injection spectroscopy by
+coupling |↑〉to the |1,0〉= |↓〉(impurity) state with long,
+weak pulses [28] of frequency ω/(2π), and measure the
+fraction of atoms transferred to |↓〉as a function of the
+detuning δ/(2π) from the bare atomic transition frequency
+ω0/(2π), such that ω = ω0+δ. We tune the impurity-bath in-
+teractions by changing the magnetic field in the proximity of
+the interstate Feshbach resonance at Bres = 526.16(3)G [16];
+the intrabath interactions are always weakly repulsive, with
+the intrastate (|↑〉−|↑〉) scattering length ab ≈20a0.
+The theoretical spectra are calculated within the model of
+an ideal Bose polaron (an infinitely heavy impurity in a non-
+interacting Bose gas) [22, 29], which, however, applies only
+approximately to our experiment; in particular, it neglects
+the motional degrees of freedom of a finite-mass impurity
+and short-range bath correlations due to intrabath repulsion
+and/or three-body physics. To compare to this theory, we
+assume that the finite mass only affects the absolute energy
+arXiv:2508.06493v1  [cond-mat.quant-gas]  8 Aug 2025
+
+2
+-2
+0
+2
+-2
+0
+2
+0
+1
+ℏδ/En
+ℏδ/En
+I(δ)En/ℏ
+1/(kna)
+ 4
+≈
+T/Tc
+(b)
+0.0
+1.0
+1.5
+0.5
+BEC
+(a)
+a
+Bres
+B
+0
++
+−
+n-1/3
+λ
+ 1
+≈
+T/Tc
+rf
+ℏδ
+| ⟩
+| ⟩
+↑
+↓
+(c)
+1.3
+−
+0.0
+0.5
+0.7
+1.1
+1/(kna)
+BEC
+ℏδ/En
+I(δ)En/ℏ
+c
+T
+≈
+4Tc
+≈
+0
+1
+-2
+0
+2
+0
+1
+-2
+0
+2
+-2
+0
+2
+FIG. 1.
+Injection spectroscopy of impurities in a bosonic bath. (a) We start with a spin-polarized Bose gas, with tuneable thermal
+wavelength λ ∝1/
+p
+T and interparticle separation n−1/3 ∝1/kn, set by the gas temperature T and density n (top). We use rf pulses
+of variable detuning δ to inject a small fraction of impurities, mapping out the spectral response I(δ) (middle). The impurity-bath
+interactions, characterized by the interstate scattering length a, are tuneable by changing the magnetic field B in the vicinity of a Feshbach
+resonance (bottom). (b) Experimental impurity spectra (top) and ideal-polaron calculations (bottom) in the strong-coupling regime for
+three different baths: an initially quasipure Bose–Einstein condensate (BEC) with n ≈12µm−3 [16] (left), a Bose gas near the critical
+temperature for condensation Tc [T ≈130 nK, n ≈5µm−3] (middle), and a thermal gas at T /Tc ≈4 [T ≈260 nK, n ≈1.7µm−3] (right).
+(c) Example experimental (symbols) and theoretical (solid lines) injection spectra for our three bath temperatures at different 1/(kna) (left
+to right), corresponding to vertical cuts through the panels in Fig. 1(b). In the strong-coupling regime, the spectral response narrows with
+increasing T. Note that we have convolved the theoretical spectra with the residual Fourier broadening (arising from the finite rf-pulse
+duration); for comparison, the unconvolved spectra are shown as dashed lines.
+scale (En ∝1/mr), and we set mr to our value m/2, where
+m is the atom mass.
+In Fig. 1(b), we show an overview of our main results,
+the injection spectra I(δ) in both experiment (top) and the-
+ory (bottom), for various 1/(kna) and three different baths:
+an initially quasipure BEC (T /Tc < 0.1), a Bose gas near
+criticality (T /Tc ≈1), and a thermal gas (T /Tc ≈4) [30];
+the spectra are normalized such that
+R
+I(δ)dδ = 1 and for
+the BEC comparison, we use T /Tc = 0.15 in the the-
+ory [31]. For the BEC case, the attractive branch extends
+to 1/(kna) > 0 and for 1/(kna) > 0.5, both the attractive
+(δ < 0) and the repulsive (δ > 0) branches are clearly re-
+solved. For T /Tc ≈1, the spectral shifts are generally sup-
+pressed compared to the BEC case. Across the resonance,
+spectral weight is more continuously transferred between
+the two branches, but the attractive branch also still extends
+to 1/(kna) > 0.5. For T /Tc ≈4, the spectral shift near uni-
+tarity is fully suppressed, the two branches connect across
+the resonance, and there is little attractive-branch spectral
+weight for 1/(kna) > 0; in the high-T limit, the only rele-
+vant attractive state is the interstate dimer, which has little
+overlap with our initial free-atom states.
+The ideal-polaron calculations reproduce the qualitative
+features of the experimental spectral functions, with the ex-
+ception of the attractive branch at 1/(kna) > 0.5, where the
+theory predicts multiple well-separated peaks, while a sin-
+gle broad feature is observed in the experiment. However,
+this regime is known to be pathological in this model and
+short-range physics needs to be included for a correct theo-
+retical description of the lower-lying attractive states [32]; a
+quantitative understanding of these states and calculation of
+the full spectral function remains a challenge (see also [33]).
+In Fig. 1(c), we show example spectra for our three T /Tc
+at different 1/(kna). The temperature effects are the most
+striking in the range 0 ≲1/(kna) ≲0.7, where the BEC
+spectra are the broadest. For T /Tc ≈1, the widths of the
+
+3
+-2
+-1
+0
+1
+2
+0
+0.5
+1
+-0.5
+0
+0.5
+-2
+-1
+0
+1
+2
+-2
+-1
+0
+1
+2
+1/(kna)
+BEC
+c
+T
+≈
+4Tc
+≈
+Ep/En
+ℏΓ/En
+FIG. 2. Spectrum mode Ep/En (top) and half-width-at-half-maximum ℏΓ/En (bottom) versus 1/(kna) for our three different baths
+(increasing T /Tc left to right); the solid lines show the corresponding ideal-polaron FDA calculations. We refrain from extracting Ep and
+Γ for the attractive branch for 1/(kna) ≳0.3.
+spectra are comparable to or smaller than for the BEC, and
+for T /Tc ≈4 the spectra are significantly more narrow. This
+behavior is notably different compared to the temperature
+evolution of spectral features in cold Fermi gases, where
+broadening with increasing temperature is generally ob-
+served, and only at temperatures above the Fermi temper-
+ature the spectra slowly narrow as 1/
+p
+T due to unitarity-
+limited collisions [11, 34].
+We characterize the spectra by their peak position Ep/En
+and half-width-at-half-maximum ℏΓ/En [35], and in Fig. 2,
+we plot these extracted quantities as a function of 1/(kna).
+For T /Tc ≈1, the measured |Ep|/En values are significantly
+lower than for the BEC, but they change only slowly be-
+tween T /Tc ≈1 and 4. The width at T /Tc ≈1 shows the
+same asymmetric dependence on 1/(kna) as the BEC data
+(with a maximum at 1/(kna) > 0), but it becomes more
+symmetric for T /Tc ≈4, with the maximum value instead
+reached at 1/(kna) ≈0.
+While the BEC data are well captured by the ideal-
+polaron theory (solid lines) [31], the agreement is only qual-
+itative for the thermal baths; in particular, the experimen-
+tal widths are about 50% larger compared to the theoretical
+ones, and for T /Tc ≈1, the experimental Ep/En of the re-
+pulsive branch is about 30% larger than the theory. These
+differences could arise for at least two reasons. First, the ra-
+tio of thermal and interaction energy scales is intrinsically
+different in the ideal-polaron model (where kBTc ≈0.88En)
+and our mobile-impurity case (where kBTc ≈0.44En), lead-
+ing to more significant suppression of (many-body) interac-
+tion effects in the theory compared to the experiment. Sec-
+ondly, for rf injection starting from a spin-polarized thermal
+Bose gas, one expects the spectral shifts to be enhanced due
+to bosonic bunching, which arises from coherence between
+the impurity and bath states. In the mean field limit (at low
+a), one expects Emf = 2πℏ2αna/mr with α = 2 (compared
+to α = 1 for a pure BEC) [36, 37], and such enhancement
+could still play a role in the strongly interacting regime.
+However, note that even for low a, we curiously find α
+closer to 1 [31], and understanding the role of coherence
+in injection experiments remains a challenge for the future.
+Finally,
+we
+study
+the
+crossover
+to
+the
+classical
+Boltzmann-gas regime, in which only two-body effects
+are relevant and one can (to a good approximation) ob-
+tain the spectral shift and width, respectively, from the real
+and imaginary part of the complex energy Σ = Ep −iℏΓ =
+−2πℏ2αn f (a)/mr, where f (a) = 〈−a/(1+ika)〉th is the
+thermally averaged two-body scattering amplitude [31]. In
+this case, the natural interaction parameter is a/λ, where
+λ =
+p
+2πℏ2/(mkBT ), and the natural energy scale E0 =
+Emfλ/a = 2πℏ2λαn/mr. Near the resonance, the interac-
+tions become unitarity-limited: at λ/a = 0, the scattering
+amplitude and Σ become purely imaginary, the spectral shift
+is zero, and the width is maximal.
+In Fig. 3, we compare our measurements to this universal
+high-T prediction (solid line), plotting Ep/E0 versus λ/a for
+our three bath temperatures; we experimentally determine
+E0 from the slope of Ep versus a in the mean-field regime
+(a ≪λ) [31]. The Ep data approach the theory only for our
+-20
+-10
+0
+10
+20
+-0.2
+-0.1
+0
+0.1
+0.2
+λ/a
+Ep/E0
+ℏΓ/E0
+-20
+0
+20
+0
+0.2
+0.4
+BEC
+c
+T
+≈
+4Tc
+≈
+λ/a
+FIG. 3. Crossover to the Boltzmann-gas regime. The main panel
+shows Ep/E0 versus λ/a, where E0 = Emfλ/a = 2πℏ2λαn/mr; to
+include the BEC data, we used the estimated initial T ≈10nK [38].
+The inset shows ℏΓ/E0 versus λ/a for T /Tc ≈4. The solid lines
+show the universal two-body prediction valid for T /Tc ≫1, while
+the dashed line shows the mean-field prediction Ep = Emf.
+
+4
+highest temperature T /Tc ≈4; here the width ℏΓ/E0 also
+agrees with the theory for λ/a ≈0, but is systematically
+higher away from unitarity (see inset).
+Our highest temperature corresponds to a phase-space
+density nλ3 ≈0.3, meaning that the two-body theory be-
+comes valid only for an essentially nondegenerate bath,
+while for a degenerate bath near Tc (where all three prin-
+cipal lengthscales a, λ, and 1/kn are comparable in magni-
+tude) many-body effects are significant [39].
+In conclusion, we have investigated the spectral response
+of impurities strongly interacting with a thermal bosonic
+bath, revealing the importance of many-body effects in the
+degenerate regime, and studying the crossover to the clas-
+sical Boltzmann-gas regime with unitarity-limited scatter-
+ing. The comparison of our thermal-bath spectra with pre-
+vious measurements for an impurity in a quasipure BEC
+highlights the conceptual differences between bosonic and
+fermionic baths: while sharp quasiparticle features emerge
+at low T in the fermionic case, the bosonic spectral response
+is intrinsically broad at strong interactions. The qualita-
+tive observations are well captured in the ideal-polaron the-
+ory, which neglects impurity motional degrees of freedom
+and short-range bath correlations, but crucially includes the
+macroscopic deformation of the bath.
+In the future, it would be interesting to extend our study
+to the case of light impurities, where Efimov physics is pre-
+dicted to play a more important role [40, 41], or to sys-
+tems with stronger intrabath repulsion, where the quasipar-
+ticles are expected to be more well-defined [13] and, fur-
+thermore, the thermal bath becomes hydrodynamic [42].
+Our work also motivates the development of novel theoret-
+ical approaches that capture the effect of short-range bath
+correlations [especially relevant for the attractive branch at
+1/(kna) > 0] at arbitrary T.
+We thank Martin Gazo for discussions and comments
+on the manuscript. The Cambridge work was supported
+by EPSRC [Grant Nos. EP/P009565/1 and EP/Y01510X/1],
+ERC [UniFlat], and STFC [Grants No. ST/T006056/1 and
+No. ST/Y004469/1]. Z.H. acknowledges support from the
+Royal Society Wolfson Fellowship. The Heidelberg work
+was supported by the DFG (German Research Foundation)
+under Project No. 273811115 (SFB 1225 ISOQUANT)
+and under Germany’s Excellence Strategy EXC2181/1-
+390900948 (the Heidelberg STRUCTURES Excellence
+Cluster).
+∗ce330@cam.ac.uk
+[1] L. D. Landau, Electron Motion in Crystal Lattices, Phys. Z.
+Sowjet. 3, 664 (1933).
+[2] S. I. Pekar, Autolocalization of the Electron in an Inertially
+Polarizable Dielectric Medium, Zh. Eksp. Teor. Fiz 16, 335
+(1946).
+[3] A. S. Alexandrov, ed., Polarons in Advanced Materials
+(Springer, New York, 2008).
+[4] C. Franchini, M. Reticcioli, M. Setvin, and U. Diebold, Po-
+larons in materials, Nat. Rev. Mater. 6, 560 (2021).
+[5] F. Scazza, M. Zaccanti, P. Massignan, M. M. Parish, and
+J. Levinsen, Repulsive Fermi and Bose Polarons in Quantum
+Gases, Atoms 10, 55 (2022).
+[6] C. Baroni, G. Lamporesi, and M. Zaccanti, Quantum mix-
+tures of ultracold gases of neutral atoms, Nat. Rev. Phys. 6,
+736 (2024).
+[7] F. Grusdt, N. Mostaan, E. Demler, and L. A. P. Ardila, Im-
+purities and polarons in bosonic quantum gases: a review on
+recent progress, Rep. Prog. Phys. 88, 066401 (2025).
+[8] P.
+Massignan,
+R.
+Schmidt,
+G.
+E.
+Astrakharchik,
+A. ˙Imamoglu, M. Zwierlein, J. J. Arlt, and G. M. Bruun, Po-
+larons in atomic gases and two-dimensional semiconductors,
+arXiv:2501.09618 (2025).
+[9] A. Schirotzek, C.-H. Wu, A. Sommer, and M. W. Zwierlein,
+Observation of Fermi Polarons in a Tunable Fermi Liquid of
+Ultracold Atoms, Phys. Rev. Lett. 102, 230402 (2009).
+[10] C. Kohstall, M. Zaccanti, M. Jag, A. Trenkwalder, P. Massig-
+nan, G. M. Bruun, F. Schreck, and R. Grimm, Metastability
+and coherence of repulsive polarons in a strongly interacting
+Fermi mixture, Nature 485, 615 (2012).
+[11] Z. Yan, P. B. Patel, B. Mukherjee, R. J. Fletcher, J. Struck,
+and M. W. Zwierlein, Boiling a Unitary Fermi Liquid, Phys.
+Rev. Lett. 122, 093401 (2019).
+[12] S. M. Yoshida, S. Endo, J. Levinsen, and M. M. Parish,
+Universality of an Impurity in a Bose–Einstein Condensate,
+Phys. Rev. X 8, 011024 (2018).
+[13] N.-E. Guenther, R. Schmidt, G. M. Bruun, V. Gurarie, and
+P. Massignan, Mobile impurity in a Bose–Einstein conden-
+sate and the orthogonality catastrophe, Phys. Rev. A 103,
+013317 (2021).
+[14] N. B. Jørgensen, L. Wacker, K. T. Skalmstang, M. M. Parish,
+J. Levinsen, R. S. Christensen, G. M. Bruun, and J. J. Arlt,
+Observation of Attractive and Repulsive Polarons in a Bose–
+Einstein Condensate, Phys. Rev. Lett. 117, 055302 (2016).
+[15] M.-G. Hu, M. J. Van de Graaff, D. Kedar, J. P. Corson, E. A.
+Cornell, and D. S. Jin, Bose Polarons in the Strongly Inter-
+acting Regime, Phys. Rev. Lett. 117, 055301 (2016).
+[16] J. Etrych, G. Martirosyan, A. Cao, C. J. Ho, Z. Hadzibabic,
+and C. Eigen, Universal Quantum Dynamics of Bose Po-
+larons, Phys. Rev. X 15, 021070 (2025).
+[17] N.-E. Guenther, P. Massignan, M. Lewenstein, and G. M.
+Bruun, Bose polarons at finite temperature and strong cou-
+pling, Phys. Rev. Lett. 120, 050405 (2018).
+[18] V. Pastukhov, Polaron in the dilute critical Bose condensate,
+J. Phys. A: Math. Theor. 51, 195003 (2018).
+[19] D. Dzsotjan, R. Schmidt, and M. Fleischhauer, Dynamical
+Variational Approach to Bose Polarons at Finite Tempera-
+tures, Phys. Rev. Lett. 124, 223401 (2020).
+[20] B. Field, J. Levinsen, and M. M. Parish, Fate of the Bose po-
+laron at finite temperature, Phys. Rev. A 101, 013623 (2020).
+[21] G. Pascual and J. Boronat, Quasiparticle Nature of the Bose
+Polaron at Finite Temperature, Phys. Rev. Lett. 127, 205301
+(2021).
+[22] M. Drescher, M. Salmhofer, and T. Enss, Bosonic functional
+determinant approach and its application to polaron spectra,
+Phys. Rev. A 110, 063303 (2024).
+[23] Z. Z. Yan, Y. Ni, C. Robens, and M. W. Zwierlein, Bose po-
+larons near quantum criticality, Science 368, 190 (2020).
+[24] A. L. Gaunt, T. F. Schmidutz, I. Gotlibovych, R. P. Smith,
+and Z. Hadzibabic, Bose–Einstein Condensation of Atoms in
+a Uniform Potential, Phys. Rev. Lett. 110, 200406 (2013).
+[25] C. Eigen, A. L. Gaunt, A. Suleymanzade, N. Navon, Z. Hadz-
+ibabic, and R. P. Smith, Observation of Weak Collapse in a
+Bose–Einstein Condensate, Phys. Rev. X 6, 041058 (2016).
+[26] N. Navon, R. P. Smith, and Z. Hadzibabic, Quantum gases in
+optical boxes, Nat. Phys. 17, 1334 (2021).
+[27] To avoid trapping atoms outside of the optical box, we al-
+ways start our measurements with a quasipure BEC in a shal-
+low trap of depth UD ≈kB ×50 nK. We then raise the depth
+to UD ≈kB ×1µK, inject energy by sinusoidally forcing the
+
+5
+system using a magnetic field gradient, and allow the gas to
+rethermalize at ab ≈100a0.
+[28] To minimize Fourier broadening and stay in the linear re-
+sponse regime, here we use pulse durations trf = {0.8−6.4}ms
+and always limit the injection fractions to ≲10%.
+[29] M. Drescher, M. Salmhofer, and T. Enss, Quench Dynamics
+of the Ideal Bose Polaron at Zero and Nonzero Temperatures,
+Phys. Rev. A 103, 033317 (2021).
+[30] Note that in the ideal-polaron theory, the spectra are expected
+to evolve continuously as the bath temperature is increased,
+with no sharp change at Tc, and we have experimentally
+checked that the injection spectra do not qualitatively change
+just below Tc.
+[31] See Supplemental Material for details on the effects of
+nonzero T for impurities in a BEC, further data on spectral
+shifts in the regime of weak interactions, and comparison be-
+tween the ideal-polaron and two-body theory at high T.
+[32] J. Levinsen, L. A. Peña Ardila, S. M. Yoshida, and M. M.
+Parish, Quantum Behavior of a Heavy Impurity Strongly
+Coupled to a Bose Gas, Phys. Rev. Lett. 127, 033401 (2021).
+[33] A. Y. Chuang, H. Q. Bui, A. Christianen, Y. Zhang, Y. Ni,
+D. Ahmed-Braun, C. Robens, and M. Zwierlein, Observation
+of a Halo Trimer in an Ultracold Bose–Fermi Mixture, Phys.
+Rev. X 15, 021098 (2025).
+[34] B. Mukherjee, P. B. Patel, Z. Yan, R. J. Fletcher, J. Struck,
+and M. W. Zwierlein, Spectral Response and Contact of the
+Unitary Fermi Gas, Phys. Rev. Lett. 122, 203402 (2019).
+[35] We
+always
+correct
+Γ
+for
+residual
+Fourier
+broaden-
+ing arising from our finite rf-pulse times,
+trf,
+using
+Γ =
+¡
+Γ2e −Γ2
+t
+¢1/2, where Γe is the raw extracted width and
+Γt ≈2.78/trf is the width of our response function [16].
+[36] D. M. Harber, H. J. Lewandowski, J. M. McGuirk, and E. A.
+Cornell, Effect of cold collisions on spin coherence and res-
+onance shifts in a magnetically trapped ultracold gas, Phys.
+Rev. A 66, 053616 (2002).
+[37] M. W. Zwierlein, Z. Hadzibabic, S. Gupta, and W. Ketterle,
+Spectroscopic Insensitivity to Cold Collisions in a Two-State
+Mixture of Fermions, Phys. Rev. Lett. 91, 250404 (2003).
+[38] R. Lopes, C. Eigen, N. Navon, D. Clément, R. P. Smith, and
+Z. Hadzibabic, Quantum Depletion of a Homogeneous Bose-
+Einstein Condensate, Phys. Rev. Lett. 119, 190404 (2017).
+[39] Note that similar conclusions were obtained in interferomet-
+ric experiments with single-component Bose gases [43]; for
+nλ3 = 0.13 (T /Tc ≈7) the measurements were consistent
+with the two-body theory, but measurements for nλ3 = 0.54
+(T /Tc ≈3) revealed effects of three-body correlations.
+[40] M. Sun, H. Zhai, and X. Cui, Visualizing the Efimov Corre-
+lation in Bose Polarons, Phys. Rev. Lett. 119, 013401 (2017).
+[41] A. Christianen, J. I. Cirac, and R. Schmidt, Phase diagram for
+strong-coupling Bose polarons, SciPost Phys. 16, 067 (2024).
+[42] T. A. Hilker, L. H. Dogra, C. Eigen, J. A. P. Glidden, R. P.
+Smith, and Z. Hadzibabic, First and Second Sound in a
+Compressible 3D Bose Fluid, Phys. Rev. Lett. 128, 223601
+(2022).
+[43] R. J. Fletcher, R. Lopes, J. Man, N. Navon, R. P. Smith,
+M. W. Zwierlein, and Z. Hadzibabic, Two- and three-body
+contacts in the unitary Bose gas, Science 355, 377 (2017).
+
+6
+SUPPLEMENTAL MATERIAL
+Effect of nonzero T for impurities in a BEC
+Initially, our quasipure BEC has T ≈10nK [38] such that
+T /Tc < 0.1, but both the impurities and the bath can be ex-
+cited during injection, due to dynamics arising from inho-
+mogeneity near the box edges and due to three-body losses.
+The effect of such excitations should be similar to that of a
+nonzero initial T, and for the theory comparisons in Figs. 1
+and 2, we used T /Tc = 0.15.
+In Fig. S1, we illustrate the effect of such small nonzero
+T in the theory (see also [22]). We plot the ideal-polaron
+theory for T = 0 and for different small T /Tc, alongside
+our BEC data. The theoretical Ep values for the repulsive
+branch show only small variation with T, while |Ep| of the
+attractive branch for −1 ≲1/(kna) ≲0 is suppressed with
+increasing T. For 1/(kn|a|) ≳1, the theoretical Γ is very
+small only for T = 0, and any small T causes significant
+broadening. On the other hand, near 1/(kna) ≈0, Γ changes
+only slowly with T. We find that an effective T /Tc = 0.15
+captures the data reasonably well for all 1/(kna).
+-2
+-1
+0
+1
+2
+0
+0.5
+1
+-0.5
+0
+0.5
+1/(kna)
+Ep/En
+ℏΓ/En
+T/Tc
+0.00
+0.10
+0.15
+0.20
+FIG. S1.
+Comparison of our BEC-bath data [16] with the ideal-
+polaron theory at zero and nonzero T. Plot of Ep/En (top) and
+ℏΓ/En (bottom) versus 1/(kna), showing the data (symbols) and
+the ideal-polaron theory at different T /Tc (legend).
+Spectral shifts in the weakly interacting regime
+In Fig. S2, we show our measured Ep values for low a,
+where spectral shifts reflect the mean-field impurity energy
+Emf = 2πℏ2αna/mr. For our BEC data [16], we used such
+measurements to calibrate the bath density; for our thermal
+baths, we instead calculate the density using the indepen-
+dently measured V and atom number N.
+For injection spectroscopy of a thermal gas, one expects
+α = 2, reflecting the enhanced probability of finding two
+identical bosons on top of each other in the initial single-
+component gas [36, 37]; for a BEC, on the other hand,
+α = 1. However, as shown in Fig. 2, we find α = 1.1(4), with
+the error dominated by our systematic uncertainties in N
+-0.6
+-0.3
+0
+0.3
+0.6
+-0.6
+-0.3
+0
+0.3
+0.6
+Ep/(2πℏ) (kHz)
+1
+2
+α
+c
+T
+≈
+4Tc
+≈
+gn/(2πℏ) (kHz)
+FIG. S2. Mean-field energy shift in the weakly interacting regime.
+Spectrum mode Ep versus gn, where g = 2πℏ2a/mr. The solid
+and dashed lines show Ep = αgn with, respectively, α = 1 and 2
+(see text for details).
+and V . Experimentally, the measured α should be slightly
+lower than 2 due to the nonzero fraction of transferred im-
+purities, but since our transfer fractions are ≲10%, this ex-
+plains only a small part of the discrepancy.
+When comparing our data with the two-body theory in
+Fig. 3, we extract E0 = Emfλ/a from the slope of Ep versus
+a for a/λ ≪1.
+Ideal-polaron theory for T /Tc ≫1
+In Fig. S3, we compare Ep and Γ in the ideal-polaron
+model to the high-T two-body theory, in which Ep −iℏΓ =
+−2πℏ2αn f (a)/mr, where
+f (a) = −
+µ m
+mr
+¶3/2
+λ3
+(2π)3
+Z
+a
+1+ika exp
+µ
+−
+ℏ2k2
+2mrkBT
+¶
+d3k
+(S1)
+Ep/E0
+ℏΓ/E0
+-10
+0
+10
+0
+0.2
+0.4
+-0.2
+-0.1
+0
+0.1
+0.2
+λ/a
+Ideal pol.,
+T/Tc = 4
+2-body,
+mr = m
+mr = m/2
+2-body,
+FIG. S3. Approaching the Boltzmann-gas regime in the ideal-
+polaron model. Spectrum mode Ep/E0 (top) and half-width-at-
+half-maximum ℏΓ/E0 (bottom) obtained from the ideal-polaron
+FDA calculations and the high-T two-body approximation (see
+legend and text for details).
+
+7
+is the thermally averaged scattering amplitude. More ex-
+plicitly, one obtains:
+Ep
+E0
+= v
+pπ
+£
+1−
+p
+π|v|exp(v2)erfc(|v|)
+¤r m
+mr
+,
+(S2)
+ℏΓ
+E0
+= 1
+π
+£
+1+ v2 exp(v2)Ei(−v2)
+¤r m
+mr
+,
+(S3)
+where we have introduced the scaled interaction parameter
+v = pm/(4πmr)λ/a and Ei(x) denotes the exponential in-
+tegral; note that here m is the bath-atom mass and mr is the
+reduced mass of an impurity and a bath atom.
+For our highest T /Tc, the ideal-polaron predictions
+(green solid lines) are already close to the two-body theory
+with mr = m (dashed line), demonstrating that many-body
+effects become essentially irrelevant for T well above Tc.
+Note that unlike the full ideal-polaron FDA calculations, the
+two-body theory can be easily extended to the equal-mass
+case with mr = m/2 (dotted line, same as the solid line in
+Fig. 3); the additional dependence on m/mr explains some
+of the difference between the ideal-polaron theory and the
+experimental data for our highest T /Tc ≈4.

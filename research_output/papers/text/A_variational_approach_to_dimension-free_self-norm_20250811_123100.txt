@@ -1,0 +1,596 @@
+A variational approach to dimension-free
+self-normalized concentration
+Ben Chugg1 and Aaditya Ramdas1
+1Departments of Machine Learning and Statistics, CMU
+{benchugg, aramdas}@cmu.edu
+August 11, 2025
+Abstract
+We study the self-normalized concentration of vector-valued stochastic processes. We
+focus on bounds for sub-ψ processes, a tail condition that encompasses a wide variety of
+well-known distributions (including sub-exponential, sub-Gaussian, sub-gamma, and sub-
+Poisson distributions). Our results recover and generalize the influential bound of Abbasi-
+Yadkori et al. [1] and fill a gap in the literature between determinant-based bounds and
+those based on condition numbers. As applications we prove a Bernstein inequality for
+random vectors satisfying a moment condition (which is more general than boundedness),
+and also provide the first dimension-free, self-normalized empirical Bernstein inequality.
+Our techniques are based on the variational (PAC-Bayes) approach to concentration.
+Contents
+1
+Introduction
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+1
+2
+Preliminaries . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+5
+3
+Warmup: Sub-Gaussian Processes
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+8
+4
+General Sub-ψ Processes
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+9
+5
+Bernstein and Bennett Inequalities . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+15
+6
+An Empirical Bernstein Inequality . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+16
+7
+Summary . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+18
+A
+Method of Mixtures for sub-Gaussian Processes . . . . . . . . . . . . . . . . . . . . . . . . .
+23
+B
+Omitted Proofs . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+24
+C
+Simulation Details . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+36
+1
+Introduction
+The modern theory of finite-sample, self-normalized concentration originates primarily in
+the work of de la Pe˜na, Klass, Lai, Shao and co-authors in the 2000s [18, 15, 19, 17, 16].
+Much of this work was focused on scalar-valued processes until de la Pe˜na et al. [16] began
+studying the concentration of vector-valued self-normalized processes in Euclidean spaces.
+These results take the form of bounds on ∥St∥V −1
+t
+where (St)t≥0 is a stochastic process in
+1
+arXiv:2508.06483v1  [math.PR]  8 Aug 2025
+
+Rd and (Vt)t≥0, Vt ∈Rd×d, is some associated positive-definite variance process. In the sub-
+Gaussian case, de la Pe˜na et al. [18] provide bounds—much earlier than the oft-cited bound
+of Abbasi-Yadkori et al. [1]—depending on the log-determinant of Vt using the method of
+mixtures with a multivariate Gaussian mixing distribution. Under slightly more general tail
+assumptions on (St), de la Pe˜na et al. [16] provide bounds that ∥St∥V −1
+t
+lies in a convex set,
+though these are not computable in closed-form.
+What about more general classes of processes?
+Recently, Whitehouse et al. [60] gave
+self-normalized concentration bounds for vector-valued sub-ψ processes, a powerful and gen-
+eral abstraction first introduced by Howard et al. [33] which captures many distributions
+of interest, including sub-Poisson, sub-exponential, sub-gamma, among others. While com-
+prehensive, the bounds of Whitehouse et al. [60] bounds deviate from the aforementioned
+log-determinant bounds in two ways. First, they are dimension-dependent and second, they
+scale with the condition number of Vt instead of the determinant. Neither dependency is
+strictly better than the other; both can be tighter in different regimes. However, the discrep-
+ancy invites the following question:
+Do dimension-free, determinant-based bounds exist for general sub-ψ processes?
+This paper answers in the affirmative, providing dimension-free, determinant-based self-
+normalized concentration inequalities for vector-valued sub-ψ processes. To demonstrate the
+scope of our technique, in Section 3 we will recover the bound of Abbasi-Yadkori et al. [1]
+exactly and show that it holds without modification for general sub-Gaussian processes (i.e.,
+outside of their particular bandit setting).
+We then turn our attention to general sub-ψ
+processes. Here our bounds have a similar functional form as the sub-Gaussian bound but
+are modified by multiplicative and additive factors that depend on ψ. Nevertheless, they
+remain closed-form and easily computable.
+Our techniques are based on the variational approach to concentration (sometimes called
+the PAC-Bayesian approach [10, 11]), which has been successfully leveraged in recent years to
+study the concentration of random vectors and matrices [63, 49, 48, 65, 14]. As we will explain
+below, the variational approach is comparable to a data-dependent method of mixtures, in
+which we choose the mixture distribution to be data-dependent but pay the price of this
+dependency with an f-divergence.
+While closing the gap between determinant-based and condition number-based bounds is
+mathematically interesting, it is also practically relevant. Beyond their application in bandit
+problems [1, 2, 56, 12, 39, 59], self-normalized bounds are used in many areas, such as system
+identification [44], control of dynamic systems [38], estimation in autoregressive processes and
+diffusion-limited aggregation processes [6], sequential inference in time-series [53], and Markov
+decision-processes [62, 56]. Moreover, in many of these applications, matrices are often ill-
+conditioned due to numerical instability or anisotropy [31]. Determinant-based bounds which
+omit the dependence on condition numbers can thus improve results in these areas.
+1.1
+Related Work
+The canonical example of a self-normalized process is the t-statistic, introduced by William
+Gosset (aka Student) in 1908 [54]. The behavior of the t-statistic can be understood by study-
+ing objects of the form P
+i≤n Xi/
+qP
+i≤n X2
+i , where X1, . . . , Xn are iid scalar observations.
+2
+
+The asymptotic behavior of such “self-normalized” sums was the focus of a significant body
+of working beginning in the late 60s and early 70s [20, 40] and gaining significant momentum
+in the 90s [29, 28, 35, 26, 25, 52].
+De la Pe˜na and others then built off of this work to provide the foundations of a general
+theory of self-normalized concentration, best summarized in the 2008 book of de la Pe˜na,
+Lai, and Shao [19]. In the scalar setting, subsequent work by Bercu and Touati [5, 6] ex-
+tended these results to heavy-tailed increments, developing self-normalized bounds when the
+normalization process (Vt) is the predictable or total quadratic variation. In 2020, Howard
+et al. [33] further generalized this framework by the studying time-uniform concentration of
+sub-ψ processes—processes characterized by specific tail conditions on the cumulant generat-
+ing functions—thereby providing a general, unifying framework for both self-normalized and
+non-self-normalized bounds.
+Beyond the scalar setting, de la Pe˜na et al. [16] (see also de la Pe˜na et al. [19, Chapter
+14]) considered the self-normalized concentration of vector-valued processes, which take the
+form of bounds on ∥St∥V −1
+t
+for a vector-valued process (St) and a matrix-valued process (Vt).
+Hotelling’s T 2-statistic [32]—the generalization of the Student t-statistic to the multivariate
+setting—is an example of such a process. De la Pe˜na [16] give bounds on the probability
+that ∥St∥V −1
+t
+belongs to a convex set, when S and V obey a “generalized canonical” as-
+sumption (see [19, Equation (14.5)]). This assumption is similar to, but weaker than, the
+sub-ψ assumption of Howard et al. [33] (extended to Rd) that we employ (Definition 2.1).
+Unfortunately, outside of the sub-Gaussian case, explicit expressions for these sets appear
+unavailable.
+In the contextual bandit setting with sub-Gaussian noise, Abbasi-Yadkori et al. [1] apply
+results of de la Pe˜na et al. [18] and give what is now a famous self-normalized inequality. They
+show that, if St = P
+k≤t Xkϵk and Vt = U0 + P
+k≤t XkX⊺
+k where ϵk is scalar sub-Gaussian
+and Xk ∈Rd is predictable (i.e., measurable at time k −1) then ∥Sτ∥V −1
+τ
+≲
+p
+log(det Vτ) at
+all stopping times τ. This bound was extended to infinite-dimensional spaces by Chowdhury
+and Gopalan [12].
+Recently, Whitehouse et al. [60] extended the sub-ψ condition of Howard et al. [33] to Rd
+and showed that, if (St) and (Vt) obey such a condition, then
+∥Sτ∥V −1
+τ
+≲γ1/2
+min(Vτ)(ψ∗)−1  γ−1
+min(Vτ)(log log(γmax(Vτ)) + d log(κ(Vτ))
+
+,
+(1.1)
+where κ(Vt) = γmax(Vτ)/γmin(Vτ) is the ratio of the largest to smallest eigenvalue of Vτ (the
+condition number) and ψ∗is the convex conjugate of ψ. In the sub-Gaussian case we have
+(ψ∗)−1(x) ≍√x, so the bound of Whitehouse et al. [60] scales as
+∥Sτ∥V −1
+τ
+≲
+p
+log log(γmax(Vτ)) + d log κ(Vt).
+(1.2)
+Neither det Vτ (the product of all eigenvalues) or κ(Vτ) dominates the other, making the
+bound of Whitehouse et al. [60] and Abbasi-Yadkori et al. [1] incomparable in general. If the
+matrices are well-conditioned then the former may be tighter, depending on the dimension.
+If there are many small eigenvalues (e.g., perhaps Vt is the result of many rank k updates
+for k ≪d) then the determinant-based bound may be tighter. In any case, the gap between
+condition number-based bounds and determinant-based bounds is what motivates this work.
+Very recently, both Akhavan et al. [3] Metelli et al. [46] gave dimension-free, self-normalized
+Bernstein inequalities, building off the earlier work of Faury et al. [22] and Zhou et al. [64],
+3
+
+Condition
+Dimension-free
+Dependence
+Faury et al. [22]
+Bounded
+det Vt
+Zhou et al. [64]
+Bounded
+UB on ∥St∥
+Ziemann [65]
+Bounded
+det Vt
+Akhavan et al. [3]∗∗
+Bounded
+✓
+det Vt
+Metelli et al. [46]∗∗
+Bounded
+✓
+det Vt
+Kirschner et al. [36]
+Bounded
+det Vt
+Kirschner et al. [36]
+Gaussian
+✓
+det Vt
+de la Pe˜na et al. [18]
+sub-Gaussian
+✓
+det Vt
+Abbasi-Yadkori et al. [1]
+sub-Gaussian
+✓
+det Vt
+Chowdhury and Gopalan [12]
+sub-Gaussian
+✓
+det Vt
+de la Pe˜na et al. [19]∗
+Gen. canonical
+✓
+det Vt
+Whitehouse et al. [60]
+sub-ψ
+κ(Vt)
+This work
+sub-ψ
+✓
+det Vt
+Table 1: A brief overview of previous vector-valued self-normalized concentration inequalities.
+“Condition” refers to the distributional assumptions made on the underlying process. “UB
+on ∥St∥” means the bound is a function of the upper bound of the norm of the observations
+(i.e., it is not adaptive to Vt). We note that Kirschner et al. [36] provide two bounds: one
+under a Gaussian assumption and one under a bounded assumption. “Gen. canonical” refers
+to the generalized canonical assumption of de la Pe˜na et al. [19, Section 14.1.2]. (∗) indicates
+that the results are not in closed-form. (∗∗) indicates that these works were concurrent to
+this one.
+both of which provide dimension-dependent Bernstein-type bounds. Akhavan et al. [3] study
+the case in which the normalization process (Vt) is the quadratic variation of (St) and Metelli
+et al. [46] study the bandit setting (as do Faury et al. [22] and Zhou et al. [64]). All of these
+results apply to bounded processes and do not extend to general sub-ψ processes. They are
+closest to the Bennett and Bernstein results we give in Section 5, though we note that our
+Bernstein bound applies to random vectors satisfying a more general condition than bound-
+edness. See Table 1 for an overview of known self-normalized concentration results in the
+multivariate setting.
+Finally, let us discuss previous work on the variational approach to concentration, which
+undergirds our work here. This technique originated in PAC-Bayesian approach to statistical
+learning theory as a method to bound the risk of randomized predictors. As far as we are
+aware, the first to employ the variational approach explicitly for the purposes of multivariate
+concentration was Oliveira [49] in 2016, who was interested in bounding the tails of quadratic
+forms. Since then, a number of authors of have employed it to various problems.
+In 2018, Giulini [27] used the variational approach to estimate the Gram operator in
+Hilbert spaces. Around the same time, Catoni and Giulini [10, 11] used it to estimate the
+mean of random vectors and the operator norm of random matrices in finite-dimensional
+Euclidean spaces. More recently, both Nakakita et al. [48] and Zhivotovskiy [63] return to
+the question of matrix concentration, each giving dimension-free bounds on sums of random
+matrices under various conditions. Chugg et al. [14] study the concentration of random vectors
+using the variational method, giving bounds under a variety of distributional assumptions
+4
+
+(including sub-ψ condition which we study here).
+All of the above works using the variational approach are in non-self-normalized settings.
+By contrast, Kirschner et al. [36] and Ziemann [65] recently noted that variational ideas can
+be used to obtain bounds similar to (or identical to) the ones presented by Abbasi-Yadkori
+et al. [1]. Ziemann [65] also gives a (dimension-dependent) Bernstein inequality for bounded
+observations in a contextual bandit setting. Overall, one can view our work here as extending
+the ideas of Kirschner et al. [36] and Ziemann [65] to more general stochastic processes.
+1.2
+Contributions and outline
+The overarching goal of this work is to provide self-normalized bounds for sub-ψ processes
+which depend on log det Vτ instead of d log κ(Vτ). After defining sub-ψ processes and giving
+an overview of the variational approach in Section 2, Section 3 provides a gentle introduction
+to our method, showing that we recover the bound of Abbasi-Yadkori et al. [1] exactly when
+the process is sub-Gaussian.
+Section 4 then provides concentration results for general sub−ψ processes evolving in Rd.
+In particular, Theorem 4.1 provides a dimension-free, self-normalized “line-crossing inequal-
+ity,” which gives the probability that ∥St∥V −1
+t
+ever crosses a threshold which depends on a
+parameter λ > 0. Different values of λ optimize the threshold at different (intrinsic) times.
+Theorems 4.3 and 4.7 employ a method known as stitching [34] which iteratively applies
+Theorem 4.1 with different parameters in order to give a bound which remains tight at all
+times. This procedure costs only an iterated logarithm term. Theorem 4.3 applies this tech-
+nique to sub-gamma processes specfically and obtains precise constants, while Theorem 4.7
+applies to more general processes but is asymptotic only.
+Section 5 applies our results to obtain self-normalized Bennett and Bernstein inequalities,
+and Section 6 provides a self-normalized, empirical Bernstein inequality for bounded random
+vectors. As far as we are aware, this is the first result of its kind that is dimension-free.
+Section 7 concludes.
+2
+Preliminaries
+Fix a filtered probability space (Ω, A, F ≡(Ft)t≥0, P). We assume that we are working in
+discrete time, so F is indexed by N ∪{0}.1 We consider two stochastic processes (St)t≥1
+and (Vt)t≥0 on (Ω, A, F, P) which are adapted to F (i.e., St and Vt are Ft-measurable).
+Throughout this work we assume that St ∈Rd and Vt ∈Rd×d for some finite positive integer
+d. We assume that Vt is positive-definite for each t ≥0, meaning that ⟨θ, Vtθ⟩≥0 for all
+θ ∈Rd.
+We are interested obtaining bounds on ∥Sτ∥V −1
+τ
+for any F-adapted stopping time τ under
+various assumptions on the relationship between St and Vt. More specifically, we think of
+(Vt) as the accumulated variance process of (St) or, in the words of Blackwell and Freedman
+[7], a measure of the intrinsic time-scale of (St). This is formalized with the notion of a sub-ψ
+process, which generalizes many distributions of interest. Let Sd−1 := {x ∈Rd : ∥x∥2 = 1}
+denote the unit sphere in Rd. Recall that a process (At) is a supermartingale with respect to
+1Though we expect that our techniques are general enough to extend to continuous time as well.
+5
+
+F if it is F-adapted and E[At|Ft−1] ≤At−1 for all t ≥1.2
+Definition 2.1 (Sub-ψ process in Rd). Let ψ : [0, λmax) →R≥0. Let (St) be an Rd-valued
+process and (Vt), Vt ≻0 an Rd×d-valued process, both adapted to a filtration F. We call (St)
+a sub-ψ process with variance proxy (Vt) if, for all θ ∈Sd−1, all λ ∈[0, λmax), and all t ≥0,
+exp
+
+λ⟨θ, St⟩−ψ(λ)⟨θ, Vtθ⟩} ≤Lλ
+t (θ),
+(2.1)
+where (Lt(θ))t≥0 is a nonnegative supermartingale adapted to (Ft). Equivalently, we say that
+(St, Vt) is a sub-ψ process.
+For scalar St and Vt, sub-ψ processes were originally proposed and studied by Howard
+et al. [33], building off of earlier work of Freedman [24] and de la Pe˜na et al. [18].
+The
+definition of a sub-ψ process was then generalized to Rd by Whitehouse et al. [60]. Like both
+Howard et al. [33] and Whitehouse et al. [60], we assume that ψ is CGF-like, meaning that it
+is strictly convex and twice continuously differentiable, with ψ(0) = limλ→0+ dψ(λ)/dλ = 0.
+While the definition of a sub-ψ process may appear abstract at first glance, let us reassure
+the reader that the definition captures many familiar examples.
+1. ψN = ψN(λ) := λ2/2 for λ ∈[0, λmax) results in a sub-exponential process distribution
+(sub-Gaussian if λmax = ∞). If Xt is Σt-sub-Gaussian3 then St = P
+k≤t Xk is a sub-ψN
+process with λmax = ∞and Vt = P
+k≤t Σk. More exotically, consider any sequence
+of random vectors (Xt) that are conditionally symmetric: Xt ∼−Xt|Ft−1 for all t.
+Lemma 3 of de la Pe˜na et al. [15] implies that St = P
+k≤t Xk and Vt = P
+k≤t XkX⊺
+k
+define a sub-ψN process with λmax = ∞. As in the scalar case, bounded random vectors
+can also be shown to be sub-ψN.
+2. ψG,c(λ) =
+λ2
+2(1−cλ) for c ∈R and λmax = 1/ max{c, 0} results in a sub-gamma process.4
+As in the scalar case, random vectors whose moments in each direction obey a Bernstein-
+type inequality can be shown to be sub-ψG,c; see Lemma 5.2. Whitehouse et al. [60]
+further show that if E|θ, Xt|3 is finite for all θ ∈Sd−1, then St = P
+j≤t Xj is sub-ψG,c
+for c = 1/6 and Vt = P
+j≤t(XjX⊺
+j + E[∥Xj∥3|Fj−1]Id). Moreover, Howard et al. [33,
+Proposition 1] show that any twice differentiable, CFG-like ψ can be bounded by aψG,c
+for some a, c > 0. Thus, any sub-ψ process is sub-ψG,c after scaling.
+3. ψE,c(λ) = (−log(1 −cλ) −cλ)/c2 for c ∈R where λmax = 1/ max{c, 0} results in
+a sub-negative-exponential process.5
+Bounded random vectors can be shown to be
+sub-exponential with a predictable variance proxy; see Section 6.
+This observation
+undergirds our empirical Bernstein bound. As in the sub-gamma case, Howard et al.
+[33, Proposition 1] also shows that any CGF-like ψ can be upper bounded by aψE,c for
+some a, c ≥0.
+2One would typically specify the distribution P under which (At) is a supermartingale, and refer to (At)
+as a P-supermartingale. However, in our case we consider only one probability measure P.
+3That is, E[exp(⟨θ, Xt⟩)|Ft−1] ≤exp(⟨θ, Σtθ⟩] for all θ ∈Sd−1.
+4ψG,c is an upper bound on the CGF of a gamma random variable [9, Section 2.4]
+5ψE,c is the CGF of a centered unit-rate negative-exponential random variable. We note that many authors
+call ψE,c the CGF of an exponential distribution [33, 34, 60], but we want to reserve the term sub-exponential
+for ψN with finite λmax. Hence we use the term negative-exponential instead.
+6
+
+4. ψP,c(λ) = (ecλ −cλ −1)/c2 for c ∈R and λmax = ∞results in a sub-Poisson pro-
+cess.6
+Most proofs of Bennett’s inequality (e.g., Boucheron et al. [9, Theorem 2.9]
+involve showing that a bounded random variable is sub-Poisson.
+In the multivari-
+ate setting, Lemma 5.1 shows that vectors (Xt) with ∥Xt∥≤b are sub-ψP,b with
+Vt = P
+j≤t E[XjX⊺
+j |Fj−1]
+For any ψ such that ψ(λ)/λ2 is nondecreasing in λ (a property known as super-Gaussianity
+which all of the above examples satisfy; see also Remark 4.2), we can lift any scalar sub-ψ
+process to a multivariate sub-ψ process as follows. Consider St = P
+k≤t ηkXk where (Xt)t≥1
+is predictable, ∥Xt∥≤1, and (ηt) is a scalar-valued sub-ψ process with variance proxy
+(Ut) ⊆R≥0.
+Then (St) is sub-ψ with variance proxy Vt = P
+k≤t UkXkX⊺
+k.
+This is the
+contextual bandit setting described in Section 1.1.
+Let us now turn to the techniques we use to prove our results. The bounds of de la Pe˜na
+et al. [19] and Abbasi-Yadkori et al. [1] are proved using the so-called “method of mixtures”
+(sometimes also called the pseudo-maximization technique [15]). At its core, the method of
+mixtures involves (i) finding a family of supermartingales Z(θ) indexed by some parameter
+space Θ, (ii) constructing a new supermartingale by integrating this family with respect to
+some measure ρ over Θ, say Zt =
+R
+Θ Zt(θ)dρ, and (iii) applying Markov’s inequality (or, more
+precisely, Ville’s inequality) to Zt. For instance, one might let Zt(θ) be the left hand side
+of (2.1) and ρ be a measure over Θ = Sd−1.
+To prove our results, we instead turn to a related but distinct technique which we call the
+variational approach to concentration. The variational approach also begins with a mixture
+but after step (2) applies the Donsker-Varadhan change of measure formula in order to bound
+Zt in terms of the KL divergence between ρ and some prior distribution. The benefit of this
+technique is that ρ can be data-dependent. This approach lies at the heart of (and originated
+in) PAC-Bayesian learning theory [30, 4]. A generic template for such a bound, which applies
+to general stochastic processes and handles stopping times, was given by Chugg et al. [13,
+Theorem 4]. See also Flynn et al. [23] for a similar statement.
+Proposition 2.2 (Variational Template). Let Θ be a measurable parameter space. For each
+θ ∈Θ, let Z(θ) ≡(Zt(θ))t≥0 be a stochastic process upper bounded by a nonnegative super-
+martingale Y (θ) ≡(Yt(θ))t≥0. Assume that all processes are adapted to the same filtration
+F and that Y0(θ) ≤1 for each θ ∈Θ. Let ν be a data-free distribution over Θ. Then, for all
+δ ∈(0, 1), with probability 1 −δ, for any F-adapted stopping time τ and any Fτ-measurable
+distribution ρτ over Θ,
+Z
+log Zτ(θ)ρτ(dθ) ≤Dkl(ρτ∥ν) + log(1/δ).
+(2.2)
+Unlike approaches to multivariate concentration based on covering arguments or chaining,
+the variational approach can lead to dimension-free bounds if one is careful in their choice
+of ρτ and ν. In our case the KL-divergence will typically act as log det(Vτ), which is how we
+obtain dimension-free, determinant-based bounds.
+Notation.
+We denote the eigenvalues of a matrix M as γmin(M) = γ1(M) ≤· · · ≤γd(M) =
+γmax(M). We let ∥M∥op = γmax(M) be the operator norm of M. For a convex function
+6ψP,c is the CGF of a centered unit-rate Poisson random variable.
+7
+
+f : I →R, I ⊆R, we denote its convex conjugate by f∗(y) = supx∈I(xy −f(x)), which is
+also a convex function. The convex conjugate is also called the Legendre–Fenchel transform.
+We let N0 = {0, 1, 2, . . . } denote the natural numbers including zero and R>0 denote the
+positive real numbers. We use A ⪰B to signify that A is greater than B in the Loewner
+order, i.e., A −B is positive semidefinite. For a vector v and positive semidefinite matrix A,
+∥v∥A denotes the norm defined as ∥v∥2
+A = ⟨v, Av⟩, where ⟨·, ·⟩is the usual dot product in Rd
+unless otherwise specified. We let a ∨b = max{a, b} and use A⊺to refer to the transpose of
+the matrix A. Throughout, the indices on the sum P
+j≤t should be assumed to run from 1
+to t.
+3
+Warmup: Sub-Gaussian Processes
+Let us begin by considering the special case of sub-Gaussian processes7 . That is, we assume
+that ψ(λ) = ψN(λ) = λ2/2. This allows for a particularly clean application of the variational
+template, since we may take Θ = Rd as our parameter space. (For ψ = ψN, one can replace
+Sd−1 with Rd.) This in turn enables the use of normal distributions in Proposition 2.2.
+We emphasize that the following result is only a very modest generalization of known
+bounds. More specifically, it is the same bound of Abbasi-Yadkori et al. [1], though in a
+slightly more general setting. In fact, the techniques of Abbasi-Yadkori et al. (i.e., the method
+of mixtures) can also be used to obtain the following bound. This is done in Appendix A.
+The result is of interest not for its novelty, but because it demonstrates that the variational
+approach can recover the same bound with the same constants as the method of mixtures.
+Ziemann [65] recently made a similar observation, though he focuses on the bandit setting in
+particular. The proof can be found in Appendix B.1.
+Theorem 3.1. Let (St, Vt) be a sub-Gaussian process. Let U0 be a fixed positive-definite
+matrix. Then, with probability 1 −δ, for any stopping time τ,
+∥Sτ∥2
+(Vτ+U0)−1 ≤log
+det(Vτ + U0)
+det U0
+
++ 2 log(1/δ).
+(3.1)
+Theorem 3.1 recovers the bound of Abbasi-Yadkori et al. [1] if (Xt)t≥1 ⊆Rd is an F-
+predictable process (Xt is the t-th action taken by a bandit algorithm in their case) and St =
+Pt
+k=1 ηkXk where ηk is scalar σ-sub-Gaussian noise.8 Then (St) is sub-ψN with variance proxy
+(Vt) defined as Vt = σ2 Pt
+k=1 XkX⊺
+k. Taking U0 = σ2ρV0 for some V0 and rearranging (3.1)
+gives Theorem 1 of Abbasi-Yadkori et al. [1]. More generally, Theorem 3.1 applies to any
+sub-Gaussian process described in Section 2, such as St = P
+k≤t Xk and Vt = P
+k≤t XkX⊺
+k
+when Xt is conditionally symmetric.
+While Theorem 4.1 is stated in terms of stopping times, it can equivalently be stated as
+a time-uniform bound of the form: P(∀t ≥1 : (3.1) holds) ≥1 −δ. In this paper we state
+our bounds in terms of stopping times to conform to previous work in this area.
+7It’s perhaps worth mentioning “sub-Gaussian process” has a double meaning in the literature. In this
+paper, a sub-Gaussian process refers to Definition 2.1 with ψ = ψN. This is different than the sub-Gaussian
+process studied by Talagrand [55], which is a collection of zero-mean random variable {Yθ : θ ∈Θ} such that
+E[exp(λ(Xθ −Xϕ))] ≤exp(ψN(λ)ρ2(θ, ϕ)) for some metric ρ and all θ, ϕ ∈Θ.
+8That is, E[exp(ληk)|Fk−1] ≤exp(λ2σ2/2)
+8
+
+4
+General Sub-ψ Processes
+Theorem 3.1 relied on transforming the sub-ψ condition from one which holds over Sd−1 to
+one which holds over Rd, thus enabling us to take Θ = Rd and use normal distributions in
+Proposition 2.2. This trick cannot be performed for general sub-ψ processes because λmax
+may be finite. However, for general ψ functions we may replace Sd−1 with Bd, the unit ball
+in Rd.9 This allows us to use nested uniform distributions over Θ = Bd in Proposition 2.2.
+The machinery we use to handle general sub-ψ processes does have drawbacks over what
+was used in Section 3 to study the specific case of sub-Gaussian processes. For one, when
+we apply the results in this section to sub-Gaussian processes, the resulting bound is looser
+than Theorem 3.1 (see Figure 1). Second, the parameter λ of the sub-Gaussian process in
+Theorem 3.1 can be optimized independently of other terms in the bound. Such closed-form
+optimization of λ is not possible in the more general case. We instead end up with line-
+crossing inequalities: For any given λ we obtain a bound on the probability that ∥St∥V −1
+t
+ever crosses a threshold parameterized by λ. Different values of λ result in a bound which is
+tighter at different values of det Vt. Theorem 4.1 gives the line-crossing inequality for general
+sub-ψ processes.
+Line-crossing inequalities are common in works studying the concentration of sub-ψ pro-
+cesses [33, 34]. To go from line-crossing inequalities to bounds which are tight at all (intrinsic)
+times, we deploy a technique which has come to be known as “stitching,” though see Sec-
+tion 4.1 for more background. We provide two kinds of stitched bounds: One for general
+sub-ψ processes, and one specifically tailored for sub-Gamma processes.
+We must define two quantities before stating our first result. First, for a positive semidef-
+inite matrices M1 and M2, define their Rayleigh-Ritz maximum10
+α(M1, M2) ≡sup
+θ∈Rd
+⟨θ, M1θ⟩
+⟨θ, M2θ⟩.
+(4.1)
+When using the Rayleigh-Ritz maximum hereafter, we will always consider matrices M1, M2
+such that M2 ⪰M1, thus implying that 0 ≤α(M1, M2) ≤1. Next, given a sub-ψ process
+(St, Vt) and a matrix U0 such that Vt ⪰U0 for all t ≥1, let
+αt = α(U0, Vt),
+(4.2)
+and define the sequence of functions (gψ,t : Im(ψ) →[0, 1])t≥1 by
+gψ,t(z) =
+p
+αtψ−1(z) + 1 −αt −
+p
+αtψ−1(z).
+(4.3)
+These functions may appear unwieldy at first glance but they behave relatively simply. In-
+deed, as αt →0 (which is the case if γmin(Vt) →∞), gψ,t(z) →1 with a rate dictated by
+ψ−1. For most common sub-ψ processes and matrices Vt which have at least some spread in
+all directions, gψ,t(z) is above 0.5 after 100 samples for all λ ∈Im(ψ). See Figure 1.
+We now present the line-crossing inequality for sub-ψ processes.
+The proof is in Ap-
+pendix B.2.
+9More specifically, we can upper bound any ψ with some bψ that allows us to replace Sd−1 with Bd. Such
+bψ are called super-Gaussian. See Remark 4.2 for further discussion.
+10This is also the maximum over the generalized Rayleigh coefficient between M1 and M2, and the solution
+to the generalized eigenvalue problem M1x = λM2x.
+9
+
+Figure 1: Left: The growth of gt for various ψ functions and across various values of λ.
+For sub-gamma, sub-Poisson, and sub-exponential we fix c = 1/4. Right: A comparison of
+Theorem 3.1 and Theorem 4.1 instantiated for ψ = ψN. In both figures we use U0 = Id and
+Vt = U0 + P
+k≤t XsX⊺
+s where the vectors Xt are chosen based on a bandit algorithm. Details
+may be found in Appendix C.
+Theorem 4.1. Let (St, Vt) be a sub-ψ process such that λ 7→ψ(λ)/λ2 is nondecreasing.
+Let U0 be a positive definite matrix such that Vt ⪰U0 for all t ≥1. Let αt = αt(U0, Vt)
+be the Rayleigh-Ritz maximum between U0 and Vt. Then, for any δ ∈(0, 1) and any λ ∈
+[ψ−1(1/γmin(U0)), λmax) ∩Im(ψ), with probability 1 −δ, for any stopping time τ,
+∥Sτ∥V −1
+τ
+≤∥U0∥1/2
+op
+λgψ,τ(λ)
+1
+2 log
+det Vτ
+det U0
+
++ 1 + log(1/δ)
+
++ gψ,τ(λ)ψ(λ)
+λ∥U0∥1/2
+op
+.
+(4.4)
+Remark 4.2. Theorem 4.1 assumes that ψ(λ)/λ2 is a nondecreasing function, a condition
+that is sometimes referred to as ψ being super-Gaussian. This assumption is without loss of
+generality in the following sense: As we detailed in Section 2, any ψ function can be upper
+bounded by a constant times ψG,c, which is super-Gaussian. (In fact, all sub-ψ processes
+mentioned in Section 2 are super-Gaussian).
+Thus, Theorem 4.1 may be applied to any
+sub-ψ process, at the cost of some looseness in constants if ψ is strictly sub-Gaussian (e.g.,
+sub-Bernoulli).
+Several remarks are in order. First, the requirement that λ ≥ψ−1(1/γmin(U0)) comes
+from our proof technique. More specifically, we use a prior which is uniform over the ellipsoid
+{θ : ψ(λ)θtU0θ ≤1}, which we require to be a subset of Bd. This holds if ψ(λ)U0 ⪰Id,
+i.e., λ ≥ψ−1(γ−1
+min(U0)). The requirement that λ ≤λmax comes from Definition 2.1, and
+the requirement that λ ∈Im(ψ) comes from the definition of gψ,t.
+Note, however, that
+for common ψ functions including ψE, ψP , ψG and ψN, Im(ψ) = R≥0, so requiring that
+λ ∈Im(ψ) is often a vacuous constraint.
+Second, Theorem 4.1 may appear as though it has the wrong order of magnitude. Indeed,
+Theorem 3.1 is a bound on ∥Sτ∥2
+V −1
+τ
+, whereas (4.4) is a bound on ∥Sτ∥V −1
+τ
+(without the
+square). To set yourself at ease, let Dt(δ) = 1
+2 log(det Vt/ det U0) + 1 + log(1/δ) and assume
+10

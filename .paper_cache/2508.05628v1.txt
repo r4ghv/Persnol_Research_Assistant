@@ -1,0 +1,1355 @@
+H-NET++: Hierarchical Dynamic Chunking
+for Tokenizer-Free Language Modelling
+in Morphologically-Rich Languages
+Mehrdad Zakershahrak, Samira Ghodratnama
+{zaker[dot]mehrdad} & {samira[dot]ghodratnama} [at]gmail[dot]com
+Abstract
+Byte-level language models eliminate fragile tokenizers but
+face computational challenges in morphologically-rich lan-
+guages (MRLs), where words span many bytes. We propose
+H-NET++, a hierarchical dynamic-chunking model that learns
+linguistically-informed segmentation through end-to-end train-
+ing. Key innovations include: (1) a lightweight Transformer
+context-mixer (1.9M parameters) for cross-chunk attention,
+(2) a two-level latent hyper-prior for document-level consis-
+tency, (3) specialized handling of orthographic artifacts (e.g.,
+Persian ZWNJ), and (4) curriculum-based training with staged
+sequence lengths. On a 1.4B-token Persian corpus, H-NET++
+achieves state-of-the-art results: 0.159 BPB reduction versus
+BPE-based GPT-2-fa (12% better compression), 5.4pp gain
+on ParsGLUE, 53% improved robustness to ZWNJ corruption,
+and 73.8% F1 on gold morphological boundaries. Our learned
+chunks align with Persian morphology without explicit su-
+pervision, demonstrating that hierarchical dynamic chunking
+provides an effective tokenizer-free solution for MRLs while
+maintaining computational efficiency.
+Introduction
+Despite the impressive breadth of today’s neural lan-
+guage models, virtually every practical system still begins
+with a tokenizer—a linguistically naive, hand-tuned set
+of rules that chops text into “manageable” symbols. For
+morphologically-rich languages (MRLs) such as Persian,
+Turkish, or Finnish, this design choice is increasingly un-
+tenable. Productive affixation yields vocabularies that dwarf
+the fixed sub-word inventories of BPE or SentencePiece; in-
+consistent whitespace and orthographic artifacts (e.g. the
+Persian zero-width non-joiner, U+200C) further erode to-
+kenizer reliability.
+The net result is a brittle processing
+pipeline in which linguistically meaningful units are frag-
+mented, duplicated or silently discarded—hindering both
+model accuracy and fairness across languages. Eliminating
+this bottleneck therefore remains a first-order priority for
+inclusive NLP. For morphologically-rich languages (MRLs)
+such as Persian, Turkish, and Finnish, this legacy design
+decision has become the primary bottleneck: (i) productive
+affixation creates unbounded vocabularies, (ii) whitespace
+is unreliable or absent, and (iii) orthographic artifacts like
+Copyright © 2025, Association for the Advancement of Artificial
+Intelligence (www.aaai.org). All rights reserved.
+the Persian zero-width non-joiner (ZWNJ, U+200C) intro-
+duce latent boundaries challenging for statistical tokenizers
+[Rust et al.(2020), Sennrich, Haddow, and Birch(2015)].
+One promising avenue is tokenizer-free, byte-level mod-
+eling, pioneered by CANINE, ByT5 and Charformer
+[Xue et al.(2022), Clark(2022), Tay et al.(2021)].
+These
+systems sidestep vocabulary explosions but pay a steep
+computational price: sequence lengths grow 3-10×, forc-
+ing quadratic attention patterns and hindering deployment.
+More recent work (e.g.
+MEGABYTE) mitigates run-
+time by fixed-size patching, yet sacrifices linguistic align-
+ment [Yu et al.(2023)].
+Hierarchical approaches provide
+a middle ground.
+H-Net [Hwang, Wang, and Gu(2025)]
+first showed that dynamic, multi-level routers can learn
+segmentation jointly with language modeling; parallel re-
+search in reinforcement-learning-based planners reached
+similar conclusions for explanation generation, demonstrat-
+ing that hierarchical abstractions improve both interpretabil-
+ity and sample efficiency in human-robot teaming tasks
+[Zakershahrak(2020)]. Building on these insights, we in-
+troduce H-NET++, a lightweight, context-aware extension
+that marries hierarchical routing with transformer mixing
+and a document-level hyper-prior, specifically tailored to the
+challenges of MRLs.
+To address these limitations, we propose H-NET++, a
+tokenizer-free, context-aware byte-level model that (i) dynam-
+ically routes bytes through an end-to-end-trained hierarchi-
+cal chunker; (ii) integrates a lightweight Transformer mixer
+for global context sharing; (iii) employs a two-level latent
+hyper-prior capturing document-level morphological consis-
+tency; (iv) utilizes a curriculum-tuned AdamW optimization
+schedule; and (v) demonstrates that hierarchically-derived
+chunks can serve as faithful, human-interpretable explana-
+tions—echoing findings in hierarchical RL for planning tasks
+[Zakershahrak(2020)]. Evaluations on a comprehensive Per-
+sian corpus (1.4B tokens) demonstrate that H-NET++ sig-
+nificantly reduces BPB, improves downstream accuracy, and
+enhances robustness to orthographic noise compared to state-
+of-the-art baselines.
+Adaptive representations have emerged as a key theme
+in NLP. For instance, dynamic segmentation techniques are
+essential for topic-sensitive and personalized summarization
+tasks [Ghodratnama et al.(2019), Ghodratnama et al.(2024)].
+H-NET++ brings this adaptive philosophy to the fundamental
+arXiv:2508.05628v1  [cs.CL]  7 Aug 2025
+
+layer of NLP—the byte stream—effectively bridging segmen-
+tation and downstream objectives.
+Efficiency is another critical dimension.
+Deploying
+Transformer models in edge environments is challenging
+due to fragmented hardware interfaces, motivating unified
+abstraction layers [Zakershahrak and Ghodratnama(2023)].
+H-NET++’s linear memory footprint and runtime efficiency
+make it especially attractive for resource-constrained deploy-
+ments.
+Our main contributions are:
+1. Novel Architecture (H-NET++).
+A Transformer-
+enhanced hierarchical router with latent hyper-prior for
+morphologically-rich languages (§).
+2. Curriculum Optimization. A staged AdamW training
+regimen stabilizing long-sequence byte-level training (§).
+3. Robustness Evaluation Suite. Character-level noise ro-
+bustness benchmarks and a new Persian gold segmenta-
+tion dataset.
+4. State-of-the-Art Performance. Achieving leading re-
+sults in BPB, downstream accuracy, and robustness (§).
+Related Work
+Tokenization in MRLs.
+The impact of tokenization quality
+on downstream tasks is amplified in languages with unreli-
+able whitespace or complex morphology, such as Persian
+[Rust et al.(2020)]. The mismatch between orthographic and
+morphological boundaries in MRLs has also been shown to
+propagate downstream bias, e.g. inflated OOV rates for mi-
+nority dialects. Large-vocabulary models like ParsBERT-2 al-
+leviate sparsity but require heavy normalization that can erase
+critical morphological information [Farahani et al.(2021)].
+Recent work has shown that subword tokenization methods
+like BPE and SentencePiece often fail to capture meaningful
+morphological units in agglutinative and morphologically-
+rich languages [Mielke et al.(2021)], leading to suboptimal
+representations. Language-specific tokenizers have been pro-
+posed [Kudo and Richardson(2018)], but they require exten-
+sive linguistic expertise and may not generalize across lan-
+guage families.
+Byte-Level Models.
+ByT5 [Xue et al.(2022)] and CA-
+NINE [Clark(2022)] avoid tokenization altogether, but
+face scalability issues due to longer sequence lengths.
+MEGABYTE [Yu et al.(2023)] addresses efficiency through
+fixed-size patching but sacrifices linguistic awareness. The
+character former [Tay et al.(2021)] learns soft segmentation
+through gradient-based subword tokenization, but is still
+baseded on predefined character vocabularies. Recent work
+on character-aware models [Al-Rfou et al.(2019)] demon-
+strates the benefits of operating at finer granularities, although
+computational costs remain prohibitive for large-scale deploy-
+ment.
+An orthogonal line of research explores hierarchical la-
+tent spaces that compress byte streams without a hard to-
+kenizer.
+The H-Net router, Charformer’s gradient-based
+tokenizer, and the hierarchical explanation generator of
+[Zakershahrak(2020)] highlight the benefits of multigranu-
+lar representations, from improved efficiency to improved
+human interpretability. H-NET++ unifies these strands by
+injecting a minimal transformer mixer that propagates global
+context across dynamically inferred chunks.
+Learned Segmentation.
+Dynamic chunking, initially ex-
+plored by H-Net [Hwang, Wang, and Gu(2025)], demon-
+strated the appeal of content-adaptive segmentation on Chi-
+nese text, yet earlier designs ignored cross-chunk depen-
+dencies vital for the long-range morphology of Persian.
+[Virpioja et al.(2013)] and neural sequence segmentation
+[Wang et al.(2017)] laid important foundations, though these
+methods typically operate as pre-processing steps rather
+than joint optimization. Recent advances in differentiable
+segmentation [Tokarchuk and Niculae(2022)] enable end-to-
+end learning but have not been thoroughly evaluated on
+morphologically-rich languages. H-NET++ addresses these
+limitations through a Transformer mixer for global context
+and a latent hyper-prior for document-level consistency.
+Multilingual and Cross-lingual Models.
+The chal-
+lenges of tokenization are particularly acute in multi-
+lingual settings.
+mT5 [Xue et al.(2020)] and XLM-R
+[Conneau et al.(2019)] rely on large shared vocabular-
+ies that may underrepresent low-resource languages.
+Recent work on tokenization-free multilingual models
+[Boukkouri et al.(2020)] shows promise but has been
+limited to European languages. Adapter-based approaches
+[Pfeiffer et al.(2020)Pfeiffer, Vuli´c, Gurevych, and Ruder]
+offer language-specific parameters but still inherit tokenizer
+limitations. Our work suggests that learned segmentation
+could provide a more principled solution for multilingual
+modeling.
+Methodology
+Problem Formulation
+Let x1:T ∈BT be an UTF-8 byte sequence. Our goal is to
+model pθ(x1:T ) = QT
+t=1 pθ(xt | x<t) while jointly inferring
+chunk boundaries C = {ck}K
+k=1. Each chunk ck = xsk:ek is
+routed to the next level; after L levels we obtain a compact
+sequence z(L)
+1:N. Unlike fixed-chunk approaches, our bound-
+ary decisions are conditioned on the input content, allowing
+morpheme-aware segmentation.
+Hierarchical Router
+The router consists of L levels, each containing a bidirec-
+tional GRU and a boundary predictor. For level ℓ:
+h(ℓ)
+t
+= BiGRU(ℓ)(z(ℓ)
+t , h(ℓ)
+t−1),
+(1)
+π(ℓ)
+t
+= σ(w(ℓ)⊤h(ℓ)
+t
++ b(ℓ)),
+(2)
+where z(ℓ)
+t
+is the input representation at position t and
+level ℓ. The boundary probability π(ℓ)
+t
+is followed by a
+straight-through Gumbel-Softmax to sample boundary gates
+g(ℓ)
+t
+∈{0, 1}. During training, we use temperature anneal-
+ing from τ = 5.0 to τ = 0.1 over 100k steps to encourage
+discrete decisions.
+
+(a) Input Processing
+mi-nevisam
+(I write)
+D9 85 DB 200C
+(b) Hierarchical Router
+BiGRU Level 1
+mi
+ne
+am
+BiGRU Level 2
+mi
+am
+BiGRU Level 3
+mi-nevisam
+(c) Context Mixing
+Transformer Mixer
+(4 heads)
+c1
+c2
+c3
+ξ1 ∼N(0, I)
+ξ2 ∼N(0, I)
+Byte Decoder
+(Mixture Density)
+p(xt+1 | z∗, ξ)
+Regular byte
+ZWNJ
+Chunk
+Attention
+Figure 1: H-NET++ architecture overview. (a) UTF-8 bytes are embedded with special handling for ZWNJ characters (shown
+in red). (b) The hierarchical router progressively groups bytes into linguistically meaningful chunks through three levels of
+BiGRU processing. (c) The Transformer mixer enables cross-chunk attention before the decoder generates byte-level predictions
+conditioned on latent document-level priors ξ1 and ξ2.
+Chunk embeddings are computed as mean-pooled hidden
+states within each gate span:
+z(ℓ+1)
+k
+=
+1
+|ck|
+X
+t∈ck
+h(ℓ)
+t ,
+(3)
+where ck denotes the k-th chunk at level ℓ.
+Transformer Context-Mixer
+A critical limitation of the original H-Net is that chunks
+cannot attend to each other. We address this with a single
+4-head multi-head self-attention block that hydrates z(L)
+1:N
+with non-local context:
+˜z = LayerNorm(MHA(z(L)) + z(L)),
+(4)
+z∗= LayerNorm(FFN(˜z) + ˜z),
+(5)
+where FFN is a two-layer feedforward network with GeLU
+activation and hidden dimension 1024. This adds only 1.9M
+parameters but enables long-range dependencies crucial for
+morphological agreement patterns.
+Two-Level Latent Hyper-Prior
+Persian exhibits strong document-level morphological consis-
+tency—authors tend to maintain consistent ZWNJ usage and
+compound word patterns. We capture this with global latent
+vectors ξ(1), ξ(2) ∼N(0, I) that are amortised via variational
+inference:
+µϕ, σϕ = MLPϕ(mean(z∗)),
+(6)
+ξ ∼N(µϕ, diag(σ2
+ϕ)).
+(7)
+The decoder receives the concatenation [z∗; ξ(1) ; ξ(2)]
+and outputs a 5-component logistic mixture density over the
+next byte, allowing multimodal distributions for ambiguous
+contexts.
+ZWNJ-Aware Byte Embedding
+Standard byte embeddings treat U+200C as just another char-
+acter. We introduce a special embedding pathway:
+et =
+Embedbyte(xt) + Embedzwnj(1)
+if xt = U+200C
+Embedbyte(xt)
+otherwise
+(8)
+This allows the model to learn ZWNJ-specific patterns with-
+out conflating them with visible characters.
+Loss Function
+The total loss combines language modeling, KL regulariza-
+tion, and morphological alignment:
+L = Eq[−log pθ(x | z, ξ)]
+|
+{z
+}
+Language Modeling
+(9)
++ λKL
+X
+ℓ
+KL(q(ℓ)
+ϕ ∥p(ℓ))
+(10)
++ λmorphLmorph + λauxLaux.
+(11)
+Lmorph encourages router gates to align with Persian mor-
+pheme boundaries extracted from a rule-based analyser (§).
+The auxiliary loss Laux includes router load balancing and
+chunk length regularization to prevent degenerate solutions.
+
+0
+50 100 150 200
+300
+400
+500
+512
+1,024
+2,048
+4,096
+Warm-up
+Growth
+Full
+Training steps (k)
+Sequence length
+Figure 2: Three-stage curriculum schedule with progressive
+increase in sequence length.
+Training Protocol
+Curriculum Learning
+Byte-level models struggle with long sequences early in train-
+ing. Our training pipeline follows a three-stage curriculum
+strategy, gradually increasing sequence lengths to stabilize
+optimization (Figure 2). We implement a three-stage curricu-
+lum:
+1. Warmup (0-50k steps): Fixed 256-byte sequences, learn-
+ing rate warmup from 0 to peak.
+2. Growth (50k-200k steps): Interleave {256, 512, 1024,
+2048}-byte sequences with probabilities {0.4, 0.3, 0.2,
+0.1}.
+3. Full (200k+ steps): Uniform sampling up to 4096 bytes.
+Optimization Details
+AdamW Configuration. After a coarse grid search over
+lr ∈{1.5, 2.0, 2.5}×10−4 and β2 ∈{0.95, 0.98}, we settled
+on lr=2.0 × 10−4, β1 = 0.9, β2 = 0.98, weight decay=0.01.
+Learning rate follows a cosine decay to 1×10−6 after warmup.
+Regularization. Gradient clipping at 1.0, dropout 0.1 on
+attention and FFN, label smoothing 0.1 on byte predictions.
+Mixed precision (fp16) with dynamic loss scaling halves
+training time.
+Infrastructure
+Training for 500k steps on 8 A100-80GB GPUs takes 14 days.
+Peak memory usage is 43GB/replica, only 5–10% overhead
+versus a flat character LM. We use gradient accumulation
+over 4 micro-batches to achieve an effective batch size of 32k
+tokens.
+Figure 4 suggests that as training progresses, the quality
+of morphological segmentation improves significantly, with
+sharp gains that align with the transitions of the curriculum.
+Training loss is dominated by the language modeling term,
+while KL and morphological alignment act as regularizers
+according to Figure 3.
+Experimental Setup
+Datasets
+Training Corpus
+We compile a 1.4B-token Persian corpus
+balanced across genres to ensure robust ZWNJ handling:
+Dataset
+Tokens
+Genre
+ZWNJ%
+Hamshahri-2
+190M
+News
+12.3
+Wikipedia-fa
+415M
+Encyclopedia
+11.2
+VOA Persian
+285M
+News
+9.8
+MirasText
+310M
+Literature
+14.1
+Ganjoor
+178M
+Poetry
+16.8
+Twitter-fa
+89M
+Social Media
+3.2
+Scientific-fa
+111M
+Academic
+15.6
+Table 1: Full 1.58B-token training corpus with ZWNJ statis-
+tics.
+Evaluation Benchmarks
+ParsGLUE. We evaluate on six
+tasks: sentiment analysis (PerSent), natural language infer-
+ence (FarsTail), named entity recognition (PEYMA), ques-
+tion answering (PQuAD), multiple choice QA (ParsiNLU-
+MC), and textual entailment (ParsiNLU-TE).
+Morphological Segmentation. We annotate 2,000 sen-
+tences with gold morpheme boundaries, focusing on com-
+pound words and clitic attachments.
+Robustness Suite. Beyond ZWNJ corruption, we test:
+(i) diacritic removal, (ii) character substitution with visually
+similar Arabic letters, (iii) word reordering within 3-word
+windows.
+Baseline Models
+We compare against six baselines spanning different architec-
+tures:
+• GPT-2-fa (125M): BPE-32k vocabulary trained on same
+corpus
+• ParsBERT (110M): Pre-trained Persian BERT
+• mT5-small (300M): Multilingual T5 fine-tuned on Per-
+sian
+• ByT5-fa (285M): Byte-level T5 trained from scratch
+• MegaByte-fa (251M): Fixed 256-byte chunks
+• H-Net-Base (248M): Original H-Net without our im-
+provements
+Implementation Details
+All models use the same train/validation/test splits (90/5/5).
+We implement H-Net++ in JAX with Flax, using the Optax
+library for optimization. The codebase will be released upon
+acceptance.
+Results
+Main Results
+Figure 5 demonstrates the distribution of learned chunk
+lengths evolves from uniform to morpheme-aligned over
+training stages, reflecting adaptive segmentation behavior.
+
+0
+100
+200
+300
+400
+500
+0.01
+0.1
+1
+10
+100
+Training steps (k)
+Loss (log scale)
+Total
+LM
+KL
+Morph
+Figure 3: Loss components over training: LM dominates, Morph and KL act as regularizers.
+0
+100
+200
+300
+400
+500
+20
+30
+40
+50
+60
+70
+80
++7pp
++4pp
+Training steps (k)
+Morphological F1 (%)
+Figure 4: Morphological segmentation quality improves
+across curriculum transitions.
+Table 2 presents our primary evaluation metrics across all
+baseline models. H-Net++ achieves state-of-the-art perfor-
+mance with a bits-per-byte (BPB) of 1.183, representing a
+0.159 reduction compared to GPT-2-fa—equivalent to 12%
+better compression. This improvement is particularly signifi-
+cant given that GPT-2-fa benefits from a carefully tuned BPE
+vocabulary optimized for Persian text.
+Model
+BPB↓
+ParsGLUE↑
+Robustness↑
+Seg F1↑
+GPT-2-fa
+1.342
+71.2
+45.3
+–
+ParsBERT
+–
+73.8
+52.1
+–
+mT5-small
+1.387
+70.5
+49.8
+–
+ByT5-fa
+1.425
+68.9
+61.2
+52.3
+MegaByte-fa
+1.398
+69.4
+58.7
+31.2
+H-Net-Base
+1.256
+74.1
+64.2
+68.4
+H-Net++
+1.183
+76.6
+69.4
+73.8
+Table 2: Main results averaged over 3 runs. H-Net++ achieves
+state-of-the-art across all metrics. Seg F1 is only applicable
+to models with learnable or byte-level segmentation.
+H-Net++ substantially outperforms all baselines.
+The
+0.159 BPB reduction over GPT-2-fa translates to 12% bet-
+ter compression, while the 5.4pp ParsGLUE improvement
+demonstrates superior language understanding. Notably, H-
+Net++ surpasses even ParsBERT, which was specifically de-
+signed for Persian.
+The 5.4 percentage point improvement on ParsGLUE
+(76.6% vs. 71.2%) demonstrates that our learned segmen-
+tation translates directly to better language understanding.
+Notably, H-Net++ outperforms even ParsBERT (73.8%), a
+model specifically designed and pre-trained for Persian with
+extensive corpus-specific optimizations. This suggests that
+dynamic, morphologically-aware chunking can compensate
+for—and even exceed—the benefits of language-specific en-
+gineering.
+Our robustness evaluation reveals perhaps the most dra-
+matic improvement: H-Net++ maintains 69.4% accuracy
+under orthographic noise, compared to just 45.3% for GPT-
+2-fa—a 53% relative improvement. This robustness stems
+from our model’s ability to dynamically adjust chunk bound-
+aries when encountering corrupted text, rather than relying
+on a fixed vocabulary that catastrophically fails when ZWNJ
+patterns deviate from training distributions. The segmenta-
+tion F1 scores provide direct evidence that H-Net++ learns
+linguistically meaningful units. With 73.8% F1 on gold mor-
+phological boundaries, our model substantially outperforms
+both ByT5-fa (52.3%) and the original H-Net-Base (68.4%).
+The poor performance of MegaByte-fa (31.2%) confirms
+that fixed-size chunking cannot capture Persian’s complex
+morphological structure.
+Task-Specific Performance
+Model
+Sentiment
+NLI
+NER
+QA
+Avg
+GPT-2-fa
+68.3
+72.1
+74.5
+69.8
+71.2
+ParsBERT
+71.2
+75.3
+76.1
+72.4
+73.8
+H-Net++
+74.8
+78.2
+79.3
+74.1
+76.6
+Table 3: ParsGLUE breakdown showing consistent improve-
+ments.
+
+0
+5
+10
+15
+20
+0
+5
+10
+15
+Length
+Freq (%)
+Early (50k)
+0
+5
+10
+15
+20
+0
+10
+20
+Length
+Mid (200k)
+0
+5
+10
+15
+20
+0
+10
+20
+30
+morpheme peak
+Length
+Late (500k)
+Figure 5: Chunk length distribution evolves from flat (early) to morpheme-aligned (late).
+Table 3 breaks down ParsGLUE performance across indi-
+vidual tasks. H-Net++ shows consistent improvements across
+all tasks, with particularly strong gains on NLI (+6.1pp) and
+NER (+4.8pp). These tasks require fine-grained linguistic
+analysis—NLI depends on understanding subtle semantic
+relationships often encoded morphologically, while NER
+must correctly identify boundaries of multi-token entities
+that may include clitics and affixes. The sentiment analy-
+sis improvement (+6.5pp) likely reflects better handling of
+negation particles and intensifiers that are often attached as
+affixes in Persian. Question answering shows the smallest
+gain (+4.3pp), which aligns with our hypothesis that QA
+relies more on broad semantic understanding than morpho-
+logical precision. Nevertheless, even this modest improve-
+ment contributes to real-world usability, as QA is often a key
+downstream application.
+Ablation Study
+We systematically remove components to understand their
+contributions:
+Configuration
+BPB↑
+ParsGLUE↓
+Full H-Net++
+1.183
+76.6
+– Transformer Mixer
+1.256 (+0.073)
+75.4 (–1.2)
+– Hyper-prior
+1.224 (+0.041)
+75.8 (–0.8)
+– ZWNJ Embedding
+1.208 (+0.025)
+75.9 (–0.7)
+– Morphology Loss
+1.201 (+0.018)
+76.1 (–0.5)
+– Curriculum
+1.195 (+0.012)
+76.2 (–0.4)
+Table 4: Ablation study. The Transformer mixer provides the
+largest gain.
+The Transformer mixer is crucial, contributing 0.073 BPB
+improvement. The hyper-prior primarily benefits downstream
+tasks, while the ZWNJ embedding and morphology loss pro-
+vide smaller but consistent gains. The results of the ablation
+study are presented in Table 4.
+The hyper-prior’s contribution (0.041 BPB) becomes more
+apparent in downstream tasks (0.8pp), suggesting it primar-
+ily helps with document-level consistency rather than local
+prediction. This aligns with our design goal of capturing
+author-specific ZWNJ usage patterns and maintaining stylis-
+tic coherence.
+The ZWNJ-specific embedding pathway provides a smaller
+but consistent improvement (0.025 BPB), confirming that
+Phrase
+BPE Segmentation
+H Net++ Segmentation
+mi nevisam
+[mi][n][evi][sam]
+[mi ][nevisam]
+ketab hayam
+[ketab][ha][yam]
+[ketab ][hay][am]
+daneshgah
+[danesh][gah]
+[daneshgah]
+Figure 6: Segmentation examples. H-Net++ (bottom) cor-
+rectly segments compound words and clitics, while BPE (top)
+over-fragments.
+explicit modeling of orthographic artifacts helps. The mor-
+phology loss (0.018 BPB) acts as an inductive bias during
+training, guiding the router toward linguistically plausible
+boundaries even when multiple segmentations might yield
+similar perplexity.
+Segmentation Quality
+Figure 6 and Table 5 provide both qualitative and quantitative
+evidence of segmentation quality. H-Net++ correctly identi-
+fies morpheme boundaries in challenging cases like ”ketab-
+ha-yam” (my books), segmenting it as [ketab][hay][am] to
+separate the stem, plural marker, and possessive clitic. In
+contrast, BPE over-fragments common morphemes while
+missing linguistically significant boundaries.
+Our quantitative evaluation on 2,000 hand-annotated sen-
+tences shows that H-Net++ achieves balanced precision
+(76.3%) and recall (71.5%). The slightly higher precision
+indicates the model prefers conservative segmentation, avoid-
+ing spurious boundaries—a desirable property for down-
+stream applications. The gap between H-Net-Base and H-
+Net++ (68.4% vs. 73.8% F1) demonstrates that our archi-
+tectural improvements directly benefit morphological aware-
+ness.
+Model
+Precision
+Recall
+F1
+ByT5-fa
+48.7
+56.2
+52.3
+MegaByte-fa
+35.4
+27.8
+31.2
+H-Net-Base
+71.2
+65.8
+68.4
+H-Net++
+76.3
+71.5
+73.8
+Table 5: Morphological segmentation accuracy.
+
+Robustness Analysis
+0
+10
+20
+30
+40
+50
+ZWNJ corruption (%)
+20
+30
+40
+50
+60
+70
+ParsGLUE accuracy
+Performance degradation under ZWNJ corruption
+H Net++
+H Net Base
+GPT 2 fa
+ByT5 fa
+Figure 7: Performance degradation under increasing ZWNJ
+corruption. H-Net++ maintains higher accuracy across all
+corruption levels.
+Figure 7 illustrates performance degradation under increas-
+ing ZWNJ corruption. Although all models decline with
+noise, H-Net++ degrades gracefully, maintaining accuracy
+above 50% even at 40% corruption. GPT-2-fa and other
+tokenizer-based models show catastrophic failure beyond
+20% corruption, as their fixed vocabularies cannot handle
+out-of-distribution ZWNJ patterns.
+This robustness extends beyond ZWNJ handling. Addi-
+tional experiments (not shown) demonstrate similar advan-
+tages for diacritic removal (18% vs. 31% error rate increase)
+and character substitution (22% vs. 38%). The dynamic
+router’s ability to adapt segmentation strategies in response
+to noisy input provides a fundamental advantage over static
+tokenization schemes.
+Analysis
+Learned Chunk Statistics
+H-Net++ learns interpretable chunking patterns:
+Chunk Type
+Avg Length (bytes)
+Frequency
+Simple words
+5.2
+42%
+Compound words
+11.3
+28%
+With clitics
+8.7
+19%
+Punctuation
+1.8
+11%
+Table 6: Distribution of learned chunk types in H-Net++.
+Attention Analysis
+The mixer learns to attend between morphologically related
+segments (Figure 8), particularly verbal agreements and noun-
+adjective concordances separated by many tokens.
+Computational Efficiency
+Despite processing raw bytes, H-Net++ remains computa-
+tionally practical (Table 7). With 43.1GB memory usage
+and 198M FLOPs/token, it adds only 50% overhead com-
+pared to BPE-based models while being 4.5 more efficient
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+Transformer mixer attention pattern
+0.2
+0.4
+0.6
+0.8
+Attention weight
+Figure 8: Attention patterns in the Transformer mixer show
+long-range dependencies between morphologically related
+chunks.
+Model
+Memory (GB)
+FLOPs/token
+Latency (ms)
+GPT-2-fa
+38.2
+124M
+12.3
+ByT5-fa
+71.3
+892M
+45.7
+H-Net++
+43.1
+198M
+18.4
+Table 7: Runtime efficiency metrics on A100 GPU.
+than ByT5-fa. This efficiency comes from hierarchical re-
+duction, typically achieving 8-10× compression at the final
+router level, resulting in sequences comparable to subword
+tokenization. The 18.4 ms latency per token on A100 hard-
+ware enables real-time applications, crucial for deployment in
+production systems. Memory usage scales linearly with the
+sequence length rather than quadratically, unlike full attention
+over bytes, making the model practical for document-level
+processing.
+Error Analysis
+Remaining errors concentrate in:
+• Arabic loanwords (18%): Different morphological pat-
+terns
+• URLs and codes (12%): Non-linguistic byte sequences
+• Poetry (8%): Unconventional ZWNJ usage for meter
+Future work could incorporate script-aware priors or
+domain-specific routers.
+Conclusion
+We have presented H-NET++, a hierarchical dynamic chunk-
+ing model that successfully eliminates the tokenization bottle-
+neck for morphologically-rich languages while maintaining
+computational efficiency. Through systematic evaluation on
+Persian—a language exemplifying the challenges of complex
+morphology, inconsistent orthography, and pervasive zero-
+width characters—we demonstrate that learned segmentation
+can surpass carefully engineered tokenizers across multiple
+dimensions: perplexity, downstream task performance, ro-
+bustness, and morphological validity.
+
+Our results challenge the prevailing assumption that fixed
+vocabularies are necessary for practical language modeling.
+H-NET++ achieves a 12% compression improvement over
+BPE-based models while learning segments that align with
+linguistic morphemes at 73.8% F1—without any explicit
+morphological supervision. The model’s 53% improvement
+in robustness to orthographic corruption addresses a critical
+weakness of current NLP systems deployed in real-world
+settings where input quality varies dramatically.
+The architectural innovations—particularly the lightweight
+Transformer mixer and document-level hyperprior—prove
+essential for capturing the long-range dependencies character-
+istic of morphological agreement systems. These components
+add minimal computational overhead (1.9M parameters, 50%
+increase in FLOP) while enabling fundamentally more flexi-
+ble text processing. The success of curriculum-based training
+further suggests that careful optimization strategies can make
+byte-level modeling practical even for long documents.
+Broader Impact.
+The tokenizer-free paradigm exemplified
+by H-NET++ has profound implications for inclusive NLP.
+By eliminating language-specific preprocessing, we lower
+barriers for communities to develop competitive language
+technologies without extensive computational linguistics ex-
+pertise. The model’s ability to discover meaningful units
+through end-to-end optimization suggests that similar ap-
+proaches could benefit other areas where handcrafted features
+limit adaptability—from speech processing to biological se-
+quence modeling.
+Limitations and Future Work.
+While H-NET++ excels
+on Persian, several challenges remain. The model still strug-
+gles with code-mixed text where multiple scripts interact,
+and the router occasionally produces linguistically implausi-
+ble boundaries for rare Arabic loanwords. Scaling to truly
+multilingual settings requires investigating whether a single
+router can learn language-specific segmentation strategies or
+whether language-adaptive components are necessary. Future
+research directions include: (1) extending the approach to
+agglutinative languages like Turkish and Finnish, where mor-
+phological complexity exceeds even Persian; (2) investigating
+transfer learning between morphologically related languages;
+(3) exploring whether hierarchical chunks can serve as a uni-
+versal interface between language models and downstream
+applications; and (4) developing theoretical frameworks to
+understand when and why dynamic chunking outperforms
+fixed tokenization. The success of H-NET++ suggests that
+the decade-old compromise of subword tokenization may
+no longer be necessary. As language models become in-
+creasingly central to technology access worldwide, moving
+beyond English-centric design choices becomes not just a
+technical challenge but an ethical imperative. By learning to
+segment jointly with language modeling objectives, we can
+build systems that adapt to each language’s unique structure
+rather than forcing languages to adapt to our algorithms.
+References
+[Al-Rfou et al.(2019)] Al-Rfou, R.; et al. 2019. Character-
+level language modeling with deeper self-attention. In
+Proceedings of the AAAI conference on artificial intelli-
+gence, volume 33, 3159–3166.
+[Boukkouri et al.(2020)] Boukkouri, H. E.; et al. 2020. Char-
+acterBERT: Reconciling ELMo and BERT for word-
+level open-vocabulary representations from characters.
+arXiv preprint arXiv:2010.10392.
+[Clark(2022)] Clark, J. H. o. 2022. Canine: Pre-training an
+efficient tokenization-free encoder for language repre-
+sentation. Transactions of the Association for Compu-
+tational Linguistics, 10: 73–91.
+[Conneau et al.(2019)] Conneau, A.; et al. 2019.
+Unsu-
+pervised cross-lingual representation learning at scale.
+arXiv preprint arXiv:1911.02116.
+[Farahani et al.(2021)] Farahani, M.; et al. 2021. Parsbert:
+Transformer-based model for persian language under-
+standing. Neural Processing Letters, 53(6): 3831–3847.
+[Ghodratnama et al.(2019)] Ghodratnama, S.; et al. 2019.
+Adaptive Summaries: A Personalized Concept-Based
+Summarization Approach by Learning from Users’
+Feedback. In Proc. of the 57th Annual Meeting of the
+Association for Computational Linguistics.
+[Ghodratnama et al.(2024)] Ghodratnama, S.; et al. 2024.
+SumRecom: A Personalized Summarization Approach
+by Learning from Users’ Feedback. arXiv preprint
+arXiv:2408.07294.
+[Hwang, Wang, and Gu(2025)] Hwang, S.; Wang, B.; and
+Gu, A. 2025.
+Dynamic Chunking for End-to-End
+Hierarchical Sequence Modeling.
+arXiv preprint
+arXiv:2507.07955.
+[Kudo and Richardson(2018)] Kudo, T.; and Richardson, J.
+2018. SentencePiece: A simple and language indepen-
+dent subword tokenizer and detokenizer for neural text
+processing. arXiv preprint arXiv:1808.06226.
+[Mielke et al.(2021)] Mielke, S. J.; et al. 2021.
+Be-
+tween words and characters: A brief history of open-
+vocabulary modeling and tokenization in nlp. arXiv
+preprint arXiv:2112.10508.
+[Pfeiffer et al.(2020)Pfeiffer, Vuli´c, Gurevych, and Ruder]
+Pfeiffer, J.; Vuli´c, I.; Gurevych, I.; and Ruder, S.
+2020.
+Mad-x:
+An adapter-based framework for
+multi-task cross-lingual transfer.
+arXiv preprint
+arXiv:2005.00052.
+[Rust et al.(2020)] Rust, P.; et al. 2020.
+How good is
+your tokenizer?
+on the monolingual performance
+of multilingual language models.
+arXiv preprint
+arXiv:2012.15613.
+[Sennrich, Haddow, and Birch(2015)] Sennrich, R.; Had-
+dow, B.; and Birch, A. 2015. Neural machine trans-
+lation of rare words with subword units. arXiv preprint
+arXiv:1508.07909.
+[Tay et al.(2021)] Tay, Y.; et al. 2021. Charformer: Fast
+character transformers via gradient-based subword tok-
+enization. arXiv preprint arXiv:2106.12672.
+[Tokarchuk and Niculae(2022)] Tokarchuk, E.; and Niculae,
+V. 2022. On target representation in continuous-output
+neural machine translation. In Proceedings of the 7th
+
+Workshop on Representation Learning for NLP, 227–
+235.
+[Virpioja et al.(2013)] Virpioja, S.; et al. 2013. Morfessor
+2.0: Python implementation and extensions for Morfes-
+sor Baseline. Aalto University.
+[Wang et al.(2017)] Wang, C.; et al. 2017. Sequence model-
+ing via segmentations. In International Conference on
+Machine Learning, 3674–3683. PMLR.
+[Xue et al.(2020)] Xue, L.; et al. 2020. mT5: A massively
+multilingual pre-trained text-to-text transformer. arXiv
+preprint arXiv:2010.11934.
+[Xue et al.(2022)] Xue, L.; et al. 2022. ByT5: Towards a
+token-free future with pre-trained byte-to-byte models.
+Transactions of the Association for Computational Lin-
+guistics, 10: 291–306.
+[Yu et al.(2023)] Yu, L.; et al. 2023. Megabyte: Predicting
+million-byte sequences with multiscale transformers.
+Advances in Neural Information Processing Systems,
+36: 78808–78823.
+[Zakershahrak and Ghodratnama(2023)] Zakershahrak, M.;
+and Ghodratnama, S. 2023. Breaking Boundaries: Can
+a Unified Hardware Abstraction Layer Simplify Trans-
+former Deployments on Edge Devices?
+In Interna-
+tional Conference on Service-Oriented Computing, 62–
+71. Springer.
+[Zakershahrak(2020)] Zakershahrak, M. o. 2020. Are we on
+the same page? hierarchical explanation generation for
+planning tasks in human-robot teaming using reinforce-
+ment learning. arXiv preprint arXiv:2012.11792.
+Supplementary Material
+Additional Implementation Details
+Router Architecture
+Each router level employs a 2-layer
+bidirectional GRU with hidden size 512, chosen for its ability
+to capture both forward and backward dependencies crucial
+for morphological boundary detection. The boundary pre-
+dictor consists of a 2-layer MLP with hidden dimensions
+[512, 256, 1], ReLU activation, and dropout 0.1 applied af-
+ter each hidden layer. We use LayerNorm before the final
+sigmoid to stabilize boundary probability predictions. The
+straight-through Gumbel-Softmax estimator uses an exponen-
+tial annealing schedule: τ(t) = max(0.1, 5.0 · 0.99995t).
+Decoder Architecture
+The byte decoder consists of:
+• 3-layer LSTM with hidden size 1024, residual connec-
+tions between layers
+• Highway connections combining LSTM output with
+chunk embeddings
+• Mixture density network outputting 5 logistic components
+with learnable mixture weights
+• Separate embeddings: byte value (256-dim), byte type
+(32-dim for alphabetic/numeric/punctuation/control), and
+positional encodings (128-dim)
+• Output projection: 1024 →512 →256 →5×3 (location,
+scale, weight for each component)
+Training Infrastructure
+• Hardware: 8× NVIDIA A100-80GB GPUs with NVLink
+• Framework: JAX 0.4.23 with Flax 0.7.5
+• Optimization: Distributed data parallelism with gradient
+accumulation
+• Preprocessing: On-the-fly UTF-8 encoding with cached
+byte representations
+• Checkpointing: Async checkpointing every 5k steps to
+minimize training interruption
+Additional Experimental Results
+Model
+Params
+L
+H
+BPB
+ParsGLUE
+Small
+125M
+3
+768
+1.241
+74.2
+Base
+252M
+3
+1024
+1.183
+76.6
+Large
+500M
+4
+1280
+1.152
+77.9
+XL
+1.1B
+4
+1600
+1.121
+79.3
+Table 8: H-Net++ scaling results. L=layers, H=hidden size.
+Larger models show diminishing returns beyond 500M pa-
+rameters.
+Scaling Analysis
+Cross-lingual Transfer
+We evaluate zero-shot transfer by
+training on Persian and testing on related languages:
+Target Language
+Segmentation F1
+BPB
+Degradation
+Persian (in-domain)
+73.8
+1.183
+–
+Dari
+68.2
+1.287
+-7.6%
+Tajik (Cyrillic)
+45.3
+1.893
+-38.6%
+Urdu
+52.1
+1.562
+-29.4%
+Arabic
+41.7
+1.734
+-43.5%
+Turkish
+38.9
+1.821
+-47.3%
+Table 9: Zero-shot cross-lingual performance. The model
+transfers best to closely related languages (Dari) and strug-
+gles with different morphological systems (Turkish).
+Morphological Phenomena Coverage
+We evaluate H-
+Net++ on specific morphological phenomena to understand
+which linguistic structures the model handles well and where
+challenges remain. The evaluation uses 500 manually anno-
+tated examples per phenomenon, with boundaries marked by
+native Persian linguists. Table X shows that H-Net++ excels
+at identifying productive affixes like verbal prefixes (mi-, be-)
+with over 90% precision, likely due to their high frequency
+and consistent patterns in the training data. The model shows
+strong performance on plural markers (-h¯a) and object mark-
+ers (-r¯a), which have relatively regular distributions and clear
+morphological functions.
+However, performance drops for more complex phenom-
+ena. Ezafe constructions, which link nouns to their modi-
+fiers, prove challenging (78.4% precision, 71.3% recall) due
+to their interaction with word boundaries and the fact that
+they’re often unmarked in informal text. Clitics show the low-
+est performance, reflecting their ambiguous status between
+
+affixes and independent words—a challenge even for human
+annotators who showed only 82% inter-annotator agreement
+on clitic boundaries. Interestingly, compound word segmenta-
+tion achieves balanced performance (82.3% precision, 79.1%
+recall), suggesting the model successfully learns the semantic
+coherence of Persian compounds despite their orthographic
+variability with ZWNJ usage.
+Phenomenon
+Precision
+Recall
+Compound words
+82.3
+79.1
+Plural markers (-h¯a)
+91.2
+88.7
+Ezafe construction
+78.4
+71.3
+Verbal prefixes (mi-, be-)
+88.9
+92.1
+Object markers (-r¯a)
+85.6
+81.2
+Comparative (-tar)
+79.3
+76.8
+Clitics
+74.2
+69.5
+Table 10: Performance breakdown by morphological phe-
+nomenon, showing strong performance on productive affixes.
+Qualitative Examples
+Input
+H-Net++ Chunks
+Type
+ketab-h¯a-ye man
+[ketab] [h¯a] [ye] [man]
+N+PL+EZ+PRO
+mi-nevis-am
+[mi] [nevis] [am]
+ASP+V+1SG
+d¯anesh-g¯ah-e
+[d¯anesh] [g¯ah] [e]
+COMP+EZ+
+tehr¯an
+[tehr¯an]
+N
+na-mi-tav¯an-ad
+[na] [mi] [tav¯an] [ad]
+NEG+ASP+V+3SG
+bozorg-tar-in
+[bozorg] [tar] [in]
+ADJ+COMP+SUP
+ket¯ab-forush-i-h¯a
+[ket¯ab] [forush] [i] [h¯a]
+COMP+DER+PL
+Table 11:
+H-Net++ segmentation examples.
+N=noun,
+PL=plural, EZ=ezafe, PRO=pronoun, ASP=aspect, V=verb,
+COMP=compound,
+NEG=negation,
+ADJ=adjective,
+SUP=superlative, DER=derivational.
+Extended Segmentation Examples
+Error Analysis Examples
+Our error analysis reveals three
+primary failure modes that account for over 75% of segmen-
+tation errors. Arabic loanwords pose challenges because
+they follow different morphological patterns than native Per-
+sian words, often lacking ZWNJ boundaries that would typ-
+ically indicate segmentation points. Non-linguistic content
+like URLs and code snippets confuse the router, which at-
+tempts to find morphological structure in fundamentally non-
+morphological byte sequences.
+Input
+H-Net++ Output
+Error Type
+¯azm¯ayeshg¯ah
+[¯azm¯aye] [shg¯ah]
+Incorrect compound split
+URL: https://...
+[htt] [ps://...]
+Non-linguistic oversegment
+al-ketab
+[al-ke] [tab]
+Arabic morphology error
+Table 12: Common error patterns showing challenges with
+Arabic loanwords and non-textual content.
+Hyperparameter Sensitivity
+Table 13 illustrates sensitivity analysis across key hyperpa-
+rameters, revealing that router depth has the most significant
+impact on performance—too few levels (1-2) cannot capture
+hierarchical morphological structure, while too many (5+)
+lead to over-segmentation and training instability. Most other
+hyperparameters show relatively flat optima, indicating the
+architecture is robust to minor configuration changes, which
+simplifies deployment and reproduction.
+Table 13: Optimal hyperparameters determined through grid
+search on validation set
+Hyperparameter
+Range Tested
+Optimal Value
+Learning rate
+[5 × 10−5, 5 × 10−4]
+2 × 10−4
+Warmup steps
+[10k, 100k]
+50k
+Gumbel temperature
+[0.1, 10.0]
+5.0 →0.1
+Morphology loss weight
+[0.0, 1.0]
+0.1
+Chunk length penalty
+[0.0, 0.5]
+0.05
+Gradient clipping
+[0.1, 5.0]
+1.0
+Additional Hyperparameter Results
+We conducted exten-
+sive grid search over training hyperparameters, finding that
+the model is surprisingly sensitive to the Gumbel temperature
+annealing schedule—too rapid cooling leads to premature
+discrete decisions, while too slow prevents the router from
+learning definitive boundaries. The morphology loss weight
+of 0.1 provides sufficient inductive bias without overwhelm-
+ing the primary language modeling objective, though values
+between 0.05-0.2 yield similar results.
+Hyperparameter
+Range Tested
+Optimal Value
+Learning rate
+[5e-5, 5e-4]
+2e-4
+Warmup steps
+[10k, 100k]
+50k
+Gumbel temperature
+[0.1, 10.0]
+5.0 →0.1
+Morphology loss weight
+[0.0, 1.0]
+0.1
+Chunk length penalty
+[0.0, 0.5]
+0.05
+Gradient clipping
+[0.1, 5.0]
+1.0
+Table 14: Optimal hyperparameters determined through grid
+search on validation set.
+Dataset Statistics
+Detailed Corpus Composition
+Our corpus spans 2.32M
+documents carefully balanced across genres to ensure robust
+ZWNJ handling and morphological diversity. The high per-
+centage of documents containing ZWNJ (89.2%) reflects our
+focus on formal Persian text where ZWNJ usage is more
+consistent, while the presence of Latin script (12.3%) and
+Arabic words (8.7%) ensures the model encounters realis-
+tic code-mixing scenarios common in contemporary Persian
+text.
+ZWNJ Usage Patterns
+Analysis of ZWNJ distribution
+reveals that nearly half of all occurrences appear in com-
+pound words, validating our focus on this challenging aspect

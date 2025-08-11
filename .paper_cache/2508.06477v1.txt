@@ -1,0 +1,764 @@
+Intuition emerges in Maximum Caliber models at criticality
+Llu´ıs Arola-Fern´andez1, ∗
+1Departament d’Enginyeria Inform`atica i Matem`atiques,
+Universitat Rovira i Virgili, 43007 Tarragona, Catalonia, Spain
+(Dated: August 11, 2025)
+Whether large predictive models merely parrot their training data or produce genuine insight lacks
+a physical explanation. This work reports a primitive form of intuition that emerges as a metastable
+phase of next-token prediction under future path-entropy maximization. The intuition mechanism
+is discovered via mind-tuning, the minimal principle that imposes Maximum Caliber in predictive
+models with a control temperature-like parameter λ. Training on random walks in deterministic
+mazes reveals a rich phase diagram: imitation (low λ), rule-breaking hallucination (high λ), and
+a fragile in-between window exhibiting strong protocol-dependence (hysteresis) and multistability,
+where models spontaneously discover novel goal-directed strategies. These results are captured by
+a mechanistic low-dimensional theory and frame intuition as an emergent property at the critical
+balance between memorizing what is and wondering what could be.
+Introduction.— The rise of large-scale predictive mod-
+els is reshaping artificial intelligence and transforming
+science and society. This progress is built upon a dom-
+inant scaling paradigm: pre-training autoregressive neu-
+ral networks [1] with enormous parameter counts on big
+volumes of data [2] using massive compute resources [3].
+When coupled with powerful search at inference time [4],
+this approach has yielded impressive performance in com-
+plex games [5], medical diagnosis [6] and algorithmic dis-
+covery [7]. Yet, the brute-force solution does not match
+the elegant efficiency of natural intelligence, which dis-
+covers intuitive shortcuts and novel, creative strategies
+from sparse data without rewards [8].
+This contrast
+sharpens a foundational debate: are these models show-
+ing sparks of artificial general intelligence (AGI) [9], or
+are they “stochastic parrots” [10] that leverage vast expe-
+rience to create an illusion of thought [5, 11]? While often
+addressed via complex reasoning benchmarks [12], the
+paradigm’s limits can be distilled into a simple Gedanken-
+experiment (Fig. 1).
+FIG. 1. Gedankenexperiment on emergent reasoning.
+A minimal environment abstracts a reasoning task into its es-
+sential components: a constrained space (a maze) and a hid-
+den, optimal solution (to escape). The reader’s own intuition
+immediately grasps the task, yet a standard predictive model
+trained on random walk trajectories (i.e., non-intelligent data
+without rewards) will never discover it.
+This work provides a physical explanation for this leap.
+We introduce mind-tuning, a simple principle that bal-
+ances next-token prediction against future path-entropy
+maximization with a temperature-like parameter λ. To
+our knowledge, mind-tuning is the minimal implementa-
+tion of the Maximum Caliber (MaxCal) principle [13–15]
+compatible with autoregressive training. It reveals the
+emergence of a fragile metastable phase, within a narrow
+temperature window between imitation and hallucina-
+tion regimes, that is reminiscent of intuition.
+While our intuition mechanism points toward a hori-
+zon of diverse futures to explore, the prevailing paradigm
+remains blind, fixated only on predicting the next token.
+Constrained path-entropy maximization is already im-
+plicit in intrinsic motivation frameworks [16] like Causal
+Entropic Forces [17], Active Inference [18], Empower-
+ment [19], or the Maximum Occupancy Principle [20].
+Yet, a physical basis for such emergent behavior in pure
+predictive models has remained elusive. The metastable
+regime reported here, bounded by distinct, entropy and
+energy-driven transitions with strong hysteresis and mul-
+tistability, explains that emergent reasoning is both
+rare and protocol-dependent.
+Furthermore, the high-
+dimensional mechanisms behind this phenomenology are
+captured analytically by a low-dimensional theory.
+This perspective casts intelligence as a state of
+computational matter [21],
+building on a rich his-
+tory of minimal models for emergent cognitive behav-
+ior, from Hopfield’s memory [22] and Kuramoto’s syn-
+chronization [23] to phenomena in deep learning like
+double-descent [24], grokking [25], neural collapse [26],
+symmetry-breaking [27], and collective learning [28], of-
+ten analyzed through spin-glass analogies [29] and phase
+diagrams [28, 30].
+The phase-transition picture is key
+to research showing that intelligent systems may oper-
+ate near a critical point, at the “edge of chaos” [31–
+33]. At criticality, fluctuations and system responsive-
+ness peak [31, 34], creating the ideal conditions for the
+leap from mimicry to insight. In the learning problem,
+our theory points toward a critical scaling axis driven by
+the system’s intrinsic dynamics and suggests that current
+models operate in a suboptimal imitation phase, lacking
+the intuition that a physical mechanism unlocks.
+arXiv:2508.06477v1  [physics.soc-ph]  8 Aug 2025
+
+2
+Mind-tuning.— We focus on reasoning problems solv-
+able by generating trajectories z = (x0, a0, x1, a1, . . . ).
+The system’s behavior is governed by a policy πθ,β, a
+neural network with parameters θ that maps a data his-
+tory ht = (x0, a0, . . . , xt) to a probability distribution
+over a discrete set of actions A via a softmax function
+πθ,β(at |ht) =
+eβ ℓθ(ht,at)
+P
+a′∈A eβ ℓθ(ht,a′) ,
+(1)
+where ℓθ are the network’s output logits and β con-
+trols the policy’s stochasticity.
+This general setting
+includes state-decision spaces, standard autoregressive
+models where histories contain tokens and other repre-
+sentations (see SM Sec. S1 for implementation details).
+To isolate the intuition mechanism, we assume an of-
+fline, imperfect setting [35]: the model never interacts
+with the environment, has no external rewards, and
+learns from a dataset D of non-optimal histories. How
+can a purely predictive model discover a better solution
+than what it has seen? By biasing prediction toward fu-
+tures with high causal path diversity, as prescribed by
+the Maximum Caliber (MaxCal) principle [13]: among
+all dynamics consistent with known constraints, prefer
+those that maximize the entropy of trajectories.
+The most unbiased learning objective that imposes
+MaxCal is the free-energy-like functional
+Fλ,β,τ(θ) = Eβ(θ) −λHτ,β(θ),
+(2)
+where λ ≥0 is an effective temperature controlling the
+energy–entropy trade-off. The first term is the standard
+Cross-Entropy or negative log-likelihood (E), measuring
+the cost of imitating the training data
+Eβ(θ) = ⟨−log πθ,β(at|ht)⟩(ht,at)∈D .
+(3)
+This energy E is traded against the causal path-entropy
+H, a Shannon entropy of self-generated futures up to a
+horizon of length τ
+Hτ,β(θ) =
+1
+τ ⟨−ln P(zfuture|ht)⟩zfuture∼πθ,β
+
+ht∈D
+. (4)
+Eq.(4) is estimated over the cone of futures induced by
+the model itself (see SM Sec. S2B for entropy calcula-
+tions), making the objective function inherently subjec-
+tive and self-referential, as the internal beliefs dynami-
+cally shape the learning landscape. The gradient update
+θ(t + 1) ←θ(t) + η[−∇θCEβ(θ) + λ∇θHτ,β(θ)]
+(5)
+frames learning as a competition between prediction and
+causal entropic forces acting on the system’s degrees of
+freedom, i.e. the network weights. To our knowledge,
+this self-contained mechanism is the minimal MaxCal
+implementation compatible with prevalent offline auto-
+regressive training. Unlike surprise-minimization [36, 37],
+here the entropic term rewards keeping plausible futures
+open, pulling toward the adjacent possible [38], without
+environment interaction [19, 20, 39]. The framework also
+admits a Bayesian interpretation [40, 41]: standard auto-
+regressive training use flat priors.
+In mind-tuning, in-
+stead, the data likelihood filters an optimistic entropic
+prior over futures with high diversity.
+Experiments.— We test this principle in the minimal
+sandbox of the Gedankenexperiment (Fig. 1). A model is
+trained on constrained random-walk trajectories, which
+respect the maze walls but contain no intelligent strate-
+gies for escaping. Sweeping the parameter λ yields a rich
+phase diagram, with clear transitions in both genotype
+(Fig. 2A) and phenotype (Fig. 2B) metrics.
+For low λ, the system is in an imitation phase: cross-
+entropy is low, path-entropy is low, and trajectories re-
+produce the suboptimal random walks from the data,
+leading to a high Mean First Passage Time (MFPT) to
+the exit (Fig. 2C). For high λ, the entropic term domi-
+nates and the system enters a hallucination phase: cross-
+FIG. 2.
+Experimental phase diagram.
+Sweeping λ re-
+veals three behavioral phases. (A) Genotype metrics: Cross-
+Entropy (E) and causal path-entropy (H).
+Inset:
+steady-
+state fluctuations σ over different initial realizations depend-
+ing on λ. (B) Phenotype metrics: Mean First Passage Time
+(MFPT), Wall Hit Ratio (WHR) and intuition likelihood (see
+SM Sec. 4B). (C-E) Example trajectories for each phase: (C)
+Imitation, (D) Intuition, and (E) Hallucination.
+
+3
+and path-entropy are high; maze rules are broken to max-
+imize path diversity, and the Wall Hit Ratio (WHR) in-
+creases sharply (Fig. 2E). Between these two regimes lies
+a narrow intuition phase, where the trade-off between
+E and H yields an emergent strategy: the model discov-
+ers the shortest legal path to the exit (Fig. 2D), achieving
+minimal MFPT with zero WHR. The separation between
+the fluctuation peaks of E and H (Fig. 2A inset) reveals
+distinct entropy- and energy-driven phase boundaries.
+Operationally, this critical learning phase maximizes
+future path-entropy with minimal cross-entropy, enabling
+novel, goal-directed behavior at inference without inter-
+action or explicit rewards. Reaching this phase depends
+on data quality and model complexity, requiring a suffi-
+ciently large future horizon and adequate model capacity
+(see SM Sec. S3 for a parametric study). The fragility
+of the mechanism is tied to multistability, as observed
+when applying adiabatic protocols that smoothly sweep
+the control parameter λ (Fig. 3). A large hysteretic loop
+FIG. 3. Hysteresis and protocol-dependence. Compar-
+ing a forward (solid) and backward (dashed) sweep of λ reveals
+that the intuitive state is stable once found. (A) Hysteresis
+loop in genotype metrics (E, H). (B, C) Phenotype for the for-
+ward and backward sweeps, respectively, with the backward
+sweep showing a wider intuition window. (D) The mean net-
+work weight ⟨w⟩acts as an order parameter capturing the
+system’s bistability. Insets show baselines without protocol.
+appears in the genotype metrics (A), which has behav-
+ioral consequences in the phenotype: while a forward
+sweep from λ ≈0 opens the intuition window, with low
+MFPT and low WHR (B), a backward sweep starting
+from high λ does not reach the desired phase (C). The
+bistability is captured by an effective order parameter –
+the mean network weight– which remains in an ordered
+intuitive state once the system has been guided there (D).
+The adiabatic protocol shows that a self-referential fine-
+tuning from imitation to controlled imagination allows
+the system to stabilize in a metastable phase, a process
+that motivates the term mind-tuning.
+Effective theory.— The phenomenology of mind-tuning
+emerges from a high-dimensional, multistable free-energy
+landscape.
+We capture the essential mechanism in a
+scalar order parameter m ∈[0, 1], representing the
+model’s rationality, and define a Boltzmann policy with
+an effective potential Um(a):
+pm,β(a|ht) =
+e−βUm(a)
+P
+a′∈A e−βUm(a′) .
+(6)
+Actions, or decisions, are classified into optimal a∗,
+rational-but-suboptimal ar, and non-rational an and mD
+is a free parameter representing the training data’s ratio-
+nality. The effective costs,
+U(a∗) = 0,
+U(ar) = max(0, m −mD)
+1 −mD
+,
+(7)
+U(an) = m,
+are designed to create a trade-off: as the model’s rational-
+ity m improves beyond the data’s, the cost of suboptimal-
+but-legal actions grows, forcing a choice between true
+optimality and rule-breaking. For the simple Markovian
+maze with a small state-space, the free energy Fλ(m)
+can be computed analytically (see SM Sec. S4A). For a
+given λ, one can also explore the learning dynamics in
+this landscape by sampling rationality states m from the
+equilibrium distribution P(m) ∝e−ˆβF(m), where the in-
+verse temperature ˆβ controls the exploration-exploitation
+trade-off, modeling stochasticity during gradient descent.
+This effective theory qualitatively reproduces the ex-
+perimental phase diagram,
+including the transitions
+in both genotypic (Fig. 4A) and phenotypic metrics
+(Fig. 4B). The underlying mechanism is revealed by ex-
+ploring the minima of the free-energy landscape, found
+by solving ∂Fλ(m)/∂m = 0. This analysis confirms a
+smooth, entropy-driven transition followed by an abrupt,
+first-order energy-driven one, creating a bistable region
+where intuition (m > mD) and hallucination (m ≪mD)
+coexist (Fig. 4C). Intriguingly, the theory further predicts
+a more elusive inspiration phase: a third stable solution
+with m ≈1, associated to a state of true creative insight.
+This strategy abruptly departs from data and represents
+
+4
+FIG. 4.
+Theoretical predictions.
+The low-dimensional
+model reproduces the experimental findings. (A) Theoretical
+E and H vs. λ. (B) Corresponding MFPT and WHR. (C)
+Minima of the free-energy landscape vs the control parameter
+λ. The plot reveals coexisting stable states (m∗, m∗∗, m∗∗∗)
+and a first-order transition where the global minimum jumps
+discontinuously, explaining the observed hysteresis.
+internalized understanding. Unlike the subtle intuitive
+state, which often requires a high inference β to be exe-
+cuted without error, this inspired solution would be ro-
+bust even with a noisy policy. Yet, it is hidden within
+a tiny basin of attraction masked by the dominant hal-
+lucination phase (see SM Sec. S4.C). These predictions
+point to a very rich phase diagram, where intuition may
+be the trigger of even more exotic phenomena.
+Accessing these different cognitive phases requires nav-
+igating a complex landscape. Indeed, the observed hys-
+teresis and the success of the adiabatic protocol are ex-
+plained by this multi-stability.
+The analytical phase-
+diagram (Fig. 4C) shows that slowly increasing λ is a
+safe route to guide the system into the intuition basin of
+attraction. In Bayesian terms, it first grounds the model
+with the data likelihood before introducing the entropic
+prior.
+Reaching more exotic phases in the landscape,
+like the predicted inspiration state, would likely demand
+more complex, non-equilibrium protocols.
+Discussion.— High-quality human data can carry an
+implicit drive toward path diversity, and optimization it-
+self can induce entropic pressures that improve general-
+ization [42], yielding an “intelligent simulator” from cu-
+rated experience. This view predicts that current models
+should spontaneously increase their causal path entropy
+with scale. Our framework makes this drive explicit and
+grounded in MaxCal, providing a shortcut to intuition
+that encodes implicit search into model weights to reduce
+the need for expensive search at inference [43].
+These
+results point toward a hidden axis, training-time imag-
+ination, that may be key to unlock out-of-distribution
+generalization in offline predictive models [35].
+Our results are demonstrated in a minimal sandbox,
+a choice that is deliberate.
+The maze is the simplest
+non-trivial setting where the mechanism can be isolated
+and reproduced analytically. Many reasoning tasks can
+be viewed as navigation through a “conceptual maze”
+where a key insight unlocks a vastly larger state-space
+[17, 19–21]. This argument promises applications in con-
+trol [17, 20], reasoning [8, 44], and planning [44]. Ste-
+fan Zweig’s The Royal Game [45] provides a compelling
+literary analogue: a prisoner achieves chess mastery by
+first studying games (imitation) and then playing against
+himself in his mind (imagination). His triumph occurs at
+the edge of madness, a state mirroring intuition coexist-
+ing with hallucination in our phase diagram.
+Yet, scaling mind-tuning to real-world cases faces sig-
+nificant challenges.
+Computationally, estimating path-
+entropy for long horizons is hard due to the combina-
+torial explosion of futures [13]. This requires designing
+clever sampling strategies [17, 46], perhaps inspired by
+dreaming, hierarchical reasoning [44] and unconventional
+methods and architectures [47, 48]. Theoretically, a full
+characterization of the phase diagrams and universality
+classe is needed to design optimal tuning protocols [49].
+For uncharted domains, identifying the right spaces for
+entropy maximization can be difficult and the offline the-
+ory may need data augmentation from environment inter-
+action [18]. Yet, tuning λ for future diversity in practice
+can turn into an alignment problem, trading benefits for
+safety [50]. Despite these challenges, this work takes a
+high-risk, high-reward route to reframing intelligence not
+merely as compression and computation, but as a physi-
+cal phenomenon emerging at criticality.
+Acknowledgments.— The author thanks many col-
+leagues at IFISC and URV for enriching discussions and
+funding from IFISC via Maria de Maeztu SoE (CEX2021-
+001164-M) and Programa Maria Goyri URV 2025.
+∗Work done while at Institut de F´ısica Interdisciplinar i
+Sistemes Complexes, IFISC (CSIC-UIB).
+Email: lluis.arolaf@urv.cat
+
+5
+[1] A. Vaswani et al., Attention is all you need, in Adv. in
+Neural Info. Processing Systems, Vol. 30 (2017).
+[2] J. Kaplan et al., Scaling laws for neural language models
+(2020), arXiv:2001.08361 [cs.LG].
+[3] J. Hoffmann et al., Training compute-optimal large lan-
+guage models, arXiv preprint (2022), 2203.15556.
+[4] DeepSeek-AI et al., Deepseek-r1: Incentivizing reason-
+ing capability in llms via reinforcement learning (2025),
+arXiv:2501.12948 [cs.CL].
+[5] P. Shojaee et al., The illusion of thinking, arXiv preprint
+(2024), 2401.00675.
+[6] P. G. Brodeur et al., Superhuman performance of a large
+language model on the reasoning tasks of a physician,
+arXiv preprint (2024), 2412.10849.
+[7] A. Novikov et al., Alphaevolve: A coding agent for scien-
+tific and algorithmic discovery (2025), arXiv:2506.13131.
+[8] F. Chollet, On the measure of intelligence, arXiv preprint
+(2019), 1911.01547.
+[9] S. Bubeck et al., Sparks of artificial general intelligence:
+Early experiments with gpt-4, (2023), 2303.12712.
+[10] E. M. Bender et al., On the dangers of stochastic parrots:
+Can language models be too big?, in Proceedings ACM
+(2021) pp. 610–623.
+[11] M. Mitchell and D. C. Krakauer, The debate over un-
+derstanding in ai’s large language models, PNAS 120,
+e2215907120 (2023).
+[12] P. Liang et al., Holistic evaluation of language models,
+arXiv preprint (2022), 2211.09110.
+[13] E. T. Jaynes, The minimum entropy production princi-
+ple, Ann. Rev.of Physical Chemistry 31, 579 (1980).
+[14] S. Press´e, K. Ghosh, J. Lee, and K. A. Dill, Principles
+of maximum entropy and maximum caliber in statistical
+physics, Reviews of Modern Physics 85, 1115 (2013).
+[15] P. D. Dixit et al., Perspective: Maximum caliber is a
+general variational principle for dynamical systems, The
+Journal of Chemical Physics 148, 010901 (2018).
+[16] A. B. Kiefer, Intrinsic motivation as constrained entropy
+maximization, arXiv preprint (2025), 2502.02962.
+[17] A. D. Wissner-Gross and C. E. Freer, Causal entropic
+forces, Physical Review Letters 110, 168702 (2013).
+[18] B. Wen, The missing reward: Active inference in the era
+of experience (2025), arXiv:2508.05619.
+[19] A. S. Klyubin, D. Polani, and C. L. Nehaniv, Empow-
+erment: A universal agent-centric measure of control, in
+2005 IEEE CEC, Vol. 1 (2005) pp. 128–135.
+[20] J. Ramirez-Ruiz et al., Complex behavior from intrin-
+sic motivation to occupy future action-state path space,
+Nature Communications 15, 5281 (2024).
+[21] K. J. Friston et al., Designing ecosystems of intelligence
+from first principles, arXiv preprint (2022), 2212.01354.
+[22] J. J. Hopfield, Neural networks and physical systems with
+emergent collective computational abilities, Proceedings
+of the National Academy of Sciences 79, 2554 (1982).
+[23] Y. Kuramoto, Self-entrainment of a population of cou-
+pled
+non-linear
+oscillators,
+in
+International
+Sympo-
+sium on Mathematical Problems in Theoretical Physics
+(Springer, 1975) pp. 420–422.
+[24] M. Belkin, D. Hsu, S. Ma, and S. Mandal, Reconciling
+modern machine-learning practice and the classical bias–
+variance trade-off, PNAS 116, 15849 (2019).
+[25] A. Power et al., Grokking: Generalization beyond overfit-
+ting in small neural networks, arXiv (2022), 2201.02177.
+[26] V. Papyan, X. Y. Han, and D. L. Donoho, Prevalence of
+neural collapse during the terminal phase of deep learning
+training, PNAS 117, 24927 (2020).
+[27] Z. Liu, Y. Xu, T. Poggio, and I. Chuang, Parameter
+symmetry potentially unifies deep learning theory, arXiv
+preprint (2025), 2502.05300.
+[28] L. Arola-Fern´andez and L. Lacasa, Effective theory of col-
+lective deep learning, Phys. Rev. Res. 6, L042040 (2024).
+[29] G. Carleo et al., Machine learning and the physical sci-
+ences, Rev. Mod. Phys. 91, 045002 (2019).
+[30] A. Lewkowycz et al., The large learning rate phase
+of deep learning:
+the catapult mechanism (2020),
+arXiv:2003.02218 [stat.ML].
+[31] M. A. Mu˜noz, Colloq.: Criticality and dynamical scaling
+in living systems, R. of Mod. Phys. 90, 031001 (2018).
+[32] S. Zhang et al., Intelligence at the edge of chaos (2025),
+arXiv:2410.02536 [cs.AI].
+[33] P. Jim´enez-Gonz´alez, M. C. Soriano, and L. Lacasa,
+Leveraging chaos in the training of artificial neural net-
+works (2025), arXiv:2506.08523 [cs.LG].
+[34] L. Arola-Fern´andez et al., Uncertainty propagation in
+complex networks: From noisy links to critical proper-
+ties, Chaos: An Interdisciplinary Journal of Nonlinear
+Science 30, 023129 (2020).
+[35] S. Levine, A. Kumar, G. Tucker, and J. Fu, Offline re-
+inforcement learning: Tutorial, review, and perspectives
+on open problems (2020), arXiv:2005.01643 [cs.LG].
+[36] C. Heins et al., Collective behavior from surprise mini-
+mization, PNAS 121, e2320239121 (2024).
+[37] K. Friston, The free-energy principle: A unified brain
+theory?, Nature Reviews Neuroscience 11, 127 (2010).
+[38] S. A. Kauffman, Investigations (Oxford Univ. Pr., 2000).
+[39] B. Eysenbach and S. Levine, Maximum entropy rl
+(provably)
+solves
+some
+robust
+rl
+problems
+(2022),
+arXiv:2103.06257 [cs.LG].
+[40] E. T. Jaynes, Information theory and statistical mechan-
+ics, The Physical Review 106, 620 (1957).
+[41] L. Zdeborov´a and F. Krzakala, Statistical physics of in-
+ference: thresholds and algorithms, Adv. in Phys. 65,
+453–552 (2016).
+[42] L. Ziyin, Y. Xu, and I. Chuang, Neural thermodynamics
+i: Entropic forces in deep and universal representation
+learning (2025), arXiv:2505.12387 [cs.LG].
+[43] P. Belcak et al., Small language models are the future of
+agentic ai (2025), arXiv:2506.02153.
+[44] G. Wang et al., Hierarchical reasoning models, arXiv
+preprint (2025), 2506.21734.
+[45] S. Zweig, The Royal Game (Viking Press, 1943).
+[46] J. e. a. Aguilar, Sampling rare trajectories using stochas-
+tic bridges, Phys. Rev. E 105, 064138 (2022).
+[47] Labay-Mora et al., Theoretical framework for quantum
+associative memories, Quantum Science and Technology
+10, 035050 (2025).
+[48] D. Brunner et al., Roadmap on neuromorphic photonics
+(2025), arXiv:2501.07917 [cs.ET].
+[49] G. Manzano et al., Thermodynamics of computations
+with absolute irreversibility, unidirectional transitions,
+and stochastic computation times, Phys. Rev. X 14,
+021026 (2024).
+[50] A. Arenas et al., The joker effect: Cooperation driven by
+destructive agents, J. of Theo. Bio. 279, 113–119 (2011).
+[51] C. J. Maddison, A. Mnih, and Y. W. Teh, The concrete
+distribution: A continuous relaxation of discrete random
+variables, in ICLR (2017) 1611.00712.
+[52] R. J. Williams, Simple statistical gradient-following al-
+gorithms for connectionist rl, ML 8, 229 (1992).
+
+1
+Supplementary Material for: “Intuition emerges in Maximum Caliber models at
+criticality”
+S1. Experimental Setup and Hyperparameters
+The experimental setting is a minimal yet non-trivial environment for testing emergent reasoning. It consists of a
+deterministic 24×24 maze with periodic boundary conditions, where an agent must find the path to a designated exit.
+This controlled testbed provides a tractable state space for analyzing the learning dynamics. The agent’s behavior is
+determined by a policy network that maps the current state (2D position xt) to a probability distribution over the
+four cardinal actions: A = {Up, Down, Right, Left}. For auto-regressive training, a simple deterministic function
+f(xt, a) maps the last action to the next state.
+The training dataset D is intentionally non-optimal. In our main experiments, it contains N = 100 trajectories,
+each of length T = 60 steps, generated by a constrained random walks. These walkers respect the maze walls (i.e.,
+never collide with them) but otherwise move randomly, exhibiting no goal-directed behavior. This design ensures that
+the optimal exit strategy is not present in the training data, forcing the model to discover it.
+The model parameters θ are optimized by minimizing the free-energy functional Fλ,β,τ(θ) (Eq. (2) in the main text)
+via the Adam optimizer. The results presented in the main text (Fig. 2) are averaged over 20 independent training
+runs, each with a different random weight initialization, to ensure statistical robustness. The key hyperparameters
+used in the main experiments are: a policy network structured as a multi-layer perceptron (MLP) with one hidden
+layer of 128 neurons and ReLU activation; a learning rate of 1 × 10−3; 300 training epochs per λ value; and a future
+horizon of τ = 40 steps in the entropy calculation.
+The policy stochasticities are set to β = 1 for training, β = 5 for entropy calculation (imagination), and β = 10 at
+inference time. A high imagination β (compared to the training β) is beneficial for discovering hidden solutions that
+maximize causal entropy (i.e., finding the exit) with a finite τ and sparse data. A high inference β is necessary to
+induce intuitive behavior in practice. In the intuition phase, the agent finds a superior solution but must execute its
+policy quite deterministically to follow the optimal path in the minimum time.
+For problems that are not Markovian or where the data representation does not contain full state information (e.g.,
+data are sequences of moves or the agent only sees its local environment), a more advanced neural network is required.
+Transformers are the standard for modeling long, non-Markovian sequences of tokens.
+Our framework naturally
+extends to these sequential autoregressive architectures, albeit at the cost of more parameters and computational
+effort.
+Code availability.— PyTorch source code to reproduce the results of this paper is publicly available on GitHub:
+https://github.com/mystic-blue/mind-tuning.
+S2. Calculation of Objective Functionals
+The mind-tuning objective function Fλ,β,τ(θ) = Eβ(θ) −λHτ,β(θ) consists of two key terms. Below we detail their
+calculation.
+A. Cross-Entropy Estimation
+The cross-entropy term Eβ(θ), defined in Eq. (3) of the main text, measures the model’s ability to imitate the
+training data. It is estimated by averaging the negative log-likelihood of the actions taken in the dataset D given the
+preceding histories:
+ˆEβ(θ) =
+1
+|D|
+X
+(ht,at)∈D
+[−log πθ,β(at|ht)]
+(S1)
+where |D| is the total number of state-action pairs in the training set. This term encourages the policy to assign high
+probability to the trajectories observed during training.
+
+2
+B. Causal Path-Entropy: Analytic Calculation for Markovian Systems
+For systems with fully-observed, discrete, and reasonably small state spaces V, such as our maze environment, the
+path-entropy can be computed analytically. Since the system is Markovian (ht = xt), we can define a policy-dependent
+transition matrix Mπ. The element (Mπ)x′,x gives the probability of transitioning from state x to state x′ under the
+current policy πθ,β. Specifically, (Mπ)x′,x = P
+a∈A πθ,β(a|x)δx′,f(x,a), where f(x, a) is the deterministic function that
+returns the next state.
+Given a starting state xstart, we can compute the probability distribution over future states ⃗ρk at any time step
+k by evolving an initial occupancy vector (a point mass at xstart) via the recursion ⃗ρk+1 = Mπ⃗ρk. The conditional
+path-entropy for a trajectory starting at xstart is then the time-averaged Shannon entropy of the policy, weighted by
+the occupancy probability at each future state:
+Hτ,β(θ|xstart) = 1
+τ
+τ−1
+X
+k=0
+X
+x∈V
+(ρk)x
+"
+−
+X
+a∈A
+πθ,β(a|x) log πθ,β(a|x)
+#
+.
+(S2)
+The total functional Hτ,β(θ) is the expectation of Eq. (S2) over all starting states in the training dataset D. This
+entire calculation is fully differentiable with respect to the network parameters θ, allowing for efficient gradient-based
+optimization.
+This exact method was used to produce all experimental and theoretical results in this work.
+Its
+primary computational cost scales with the size of the state space |V|, making it suitable for our testbed.
+C. Causal Path-Entropy: Monte Carlo Estimation for High-Dimensional Systems
+For high-dimensional or continuous state spaces, or for non-Markovian sequence models like Transformers, the
+analytic approach becomes intractable. In these cases, H must be estimated via Monte Carlo sampling. For each
+starting history hstart in a training mini-batch, we generate K independent future trajectories (rollouts) of length τ
+by autoregressively sampling actions from the policy. The estimator for the path-entropy functional is:
+ˆHτ,β(θ) ≈1
+|B|
+X
+hstart∈B
+
+1
+Kτ
+K
+X
+k=1
+τ−1
+X
+j=0
+h
+−ln πθ,β(a(k)
+j |h(k)
+j )
+i
+hstart
+
+.
+(S3)
+To ensure that gradients can be backpropagated through the sampling process, especially for discrete action spaces,
+reparameterization techniques are required. A standard method is the Gumbel-Softmax trick [S51], which provides
+a continuous, differentiable approximation to the sampling procedure. Alternatively, the gradient of the entropic
+objective can be estimated using policy gradient methods like REINFORCE [S52], though this often suffers from high
+variance.
+S3. Parametric Dependencies of the Intuition Phase
+The emergence of the fragile intuition phase is a critical phenomenon highly sensitive to the model, data, and
+learning protocol parameters. Below, we detail the key dependencies we investigated.
+A. Future Horizon τ
+The future horizon τ dictates the timescale of the model’s “imagination”. Our experiments show that the intuition
+phase only emerges for a sufficiently long horizon (Fig. S1).
+For a small τ, the model is myopic; the long-term entropic gain from escaping the maze is not visible, so the model
+defaults to minimizing cross-entropy and remains in the imitation phase. As τ increases, the model can foresee the
+vast expansion of possible futures that awaits outside the maze, creating a strong entropic incentive to find an exit.
+For intermediate horizons, we often observe a cheating phase—a local minimum in the free-energy landscape where
+the model learns to take a single illegal step through a wall. This strategy is a compromise: it incurs a small penalty
+for rule-breaking but gains a significant medium-term entropic advantage. Only for large τ does the incentive to find
+a legal path to maximal freedom dominate (i.e., virtue over vice).
+
+3
+FIG. S1. Dependence on Future Horizon τ. Phase diagram of the genotypic (top) and phenotypic (bottom) metrics as a
+function of λ for different future horizons. The intuition window (sharp dip in MFPT and zero WHR, shaded blue) appears
+and stabilizes only for a long horizon (τ = 40). (A) A short horizon (τ = 1) yields only imitation and hallucination. (B) An
+intermediate horizon (τ = 20) can lead to a cheating strategy, which is worse than the true intuitive solution (C).
+B. Model Capacity
+The capacity of the policy network, controlled by the number of neurons, is relevant (Fig. S2). A model with
+insufficient capacity has high bias and lacks the representational power to learn the complex, mixed strategy required
+to balance maze constraints with goal-directed exploration. It cannot simultaneously represent the world model and
+the entropic drive, so the intuition phase does not emerge. Conversely, a model with excessive capacity relative to
+the task complexity is prone to overfitting. It may perfectly memorize the noisy random walks from the training data
+or discover trivial, non-generalizable solutions (e.g., exploiting specific numerical artifacts) to maximize entropy. The
+intuition phase occupies a “sweet spot” where model capacity is well-matched to the problem, enabling generalization
+from sparse data rather than mere memorization or unconstrained hallucination.
+C. Maze Complexity
+We evaluated the framework on several environments of increasing complexity (Fig. S3). In simpler environments
+(e.g., a straight corridor), the escape task is trivial because the data trajectories are very close to the optimal solution.
+The intuition window is consequently wide and appears at lower values of λ. As maze complexity increases, finding
+the optimal path becomes a harder constraint-satisfaction problem. The cross-entropy term E more strongly penalizes
+deviations from valid paths. To overcome this, a stronger entropic pressure (a higher λ) is required to motivate the
+search for the distant exit. As a result, the intuition window narrows and shifts in the phase diagram, indicating that
+a more precise tuning of the energy-entropy balance is needed for more difficult problems. In some cases, the intuition
+window may disappear entirely, requiring protocols like the adiabatic sweep to be reached.
+S4. Detailed Theory and Further Predictions
+Here we expand on the theory from the main text, providing the explicit analytical forms for the free energy
+functional. We also clarify the calculation of the intuition likelihood (pintuition) and discuss the existence of a more
+elusive inspiration phase as a further prediction of the theory.
+
+4
+FIG. S2. Dependence on Model Capacity. Emergence of the intuition phase as a function of the number of neurons in
+the hidden layer. (A) A model with insufficient capacity (e.g., 8 neurons) cannot learn the required behavior. The intuition
+phase is robust for models with sufficient capacity (e.g., 64 (B) or 128 neurons (C)), which are powerful enough to discover the
+solution but not so powerful that they immediately overfit.
+FIG. S3.
+Dependence on Maze Complexity.
+Position and width of the intuition window (measured by MFPT) for
+environments of varying difficulty. (A,B) For a simple corridor, the window is wide and appears at low λ. (C) For the more
+complex maze used in the main text, the window is narrower, reflecting the increased difficulty. (D) For even more complex
+problems, the intuition window can disappear, necessitating specific protocols to reach the desired phase.
+A. The Effective Free Energy Functional
+For the Markovian maze environment with a small state-space, the terms of the free energy functional Fλ(m) =
+E(m)−λH(m) can be computed analytically as a function of the rationality order parameter m. Note that this theory
+is effective: the β of the analytical policy is distinct from the experimental one, since the former controls only three
+
+5
+minimal analytical costs while the latter modulates the entire logit vector.
+The effective cross-entropy, E(m), is the expectation of the negative log-likelihood over the state distribution of
+the given data, ρD(s). For a single state s, the cross-entropy is Es(m) = log Zm(s) + β⟨Um(a)⟩a∼uniform, where the
+average is over legal moves from s. Summing over the data distribution gives
+E(m) =
+*
+log
+ X
+a∈A
+e−βUm(a|s)
+!
++ β
+P
+a′∈Alegal(s) Um(a′|s)
+|Alegal(s)|
++
+s∼ρD
+,
+(S4)
+where Um(a|s) is the cost of action a in state s (which depends on whether the move is optimal, suboptimal, or a wall
+collision) and Alegal(s) is the set of valid moves from s.
+The effective path-entropy, H(m), is the time-averaged Shannon entropy of the policy pm,β over trajectories of
+length τ starting from an initial state distribution ρ0 (in our case, a single point at the maze start). It is calculated
+using the policy-dependent transition matrix Mm
+H(m) = 1
+τ
+τ−1
+X
+k=0
+ X
+s∈V
+(ρk)s · hm(s)
+!
+,
+(S5)
+where ⃗ρk = (Mm)k⃗ρ0 is the state occupancy vector at time k, and hm(s) is the local policy entropy at state s:
+hm(s) = −
+X
+a∈A
+pm,β(a|s) log pm,β(a|s).
+(S6)
+These analytical expressions are used to generate the theoretical plots in the main text.
+B. Calculating the Intuition Likelihood (pintuition)
+The intuition metric, visualized as the cyan region in the plots, quantifies the model’s ability to spontaneously
+follow the optimal path. In experiments, this intuition likelihood is measured as the fraction of independent trials
+where the system displays the optimal solution at inference (minimal MFPT with zero WHR).
+The same empirical criterion can be applied to the effective theory. More interestingly, the intuition likelihood can
+also be calculated analytically if the optimal route is known. We define it as the joint probability of generating the
+true shortest path to the exit, for a horizon of q steps (where q depends on the maze topology). Let the optimal path
+be the sequence of states z∗= (s∗
+0, s∗
+1, . . . , s∗
+q), where s∗
+0 is the starting position, and let a∗
+t be the optimal action to
+transition from s∗
+t to s∗
+t+1. The intuition likelihood for a given rationality level m is:
+pintuition(m) =
+q−1
+Y
+t=0
+pm,β(a∗
+t |s∗
+t )
+(S7)
+Since the system can be multistable, the final value reported in the figure for a given λ is the Boltzmann-weighted
+average of this likelihood over all coexisting free energy minima (m∗, m∗∗, . . . ):
+⟨pintuition⟩λ =
+X
+i
+wi(λ) · pintuition(mi)
+where
+wi(λ) =
+e−ˆβFλ(mi)
+P
+j e−ˆβFλ(mj) ,
+(S8)
+where ˆβ is an inverse temperature controlling the sampling of minima. At high ˆβ (low thermal noise), the system
+predominantly samples the global minimum, reproducing the steady-state results of the main experiments. In the
+numerical experiments, each run starts from a random weight initialization, and gradient descent acts as a local search
+that can fall into any of the attracting states. The likelihood metric is therefore zero in the imitation and hallucination
+phases (where the probability of following the optimal path is negligible) and peaks sharply in the narrow intuition
+window, provided the policy’s inference β is sufficiently high.
+C. From Intuition to Inspiration: Further Predictions of the Effective Theory
+The intuition phase represents a significant discovery, where the model finds a hidden, optimal solution that
+smoothly branches from the data-driven imitation phase. It is a better way, but not a radical departure. Intriguingly,

@@ -1,0 +1,141 @@
+Genie Envisioner: A Unified World Foundation Platform for
+Robotic Manipulation
+Yue Liao∗
+Pengfei Zhou∗
+Siyuan Huang∗
+Donglin Yang
+Shengcong Chen
+Yuxin Jiang
+Yue Hu
+Jingbin Cai
+Si Liu
+Jianlan Luo
+Liliang Chen†
+Shuicheng Yan⋄
+Maoqing Yao⋄
+Guanghui Ren†⋄
+AgiBot Genie Team
+NUS LV-Lab
+BUAA
+https://genie-envisioner.github.io
+Abstract
+We introduce Genie Envisioner (GE), a unified world foundation platform for robotic manipulation
+that integrates policy learning, evaluation, and simulation within a single video-generative framework.
+At its core, GE-Base is a large-scale, instruction-conditioned video diffusion model that captures
+the spatial, temporal, and semantic dynamics of real-world robotic interactions in a structured latent
+space. Built upon this foundation, GE-Act maps latent representations to executable action trajectories
+through a lightweight, flow-matching decoder, enabling precise and generalizable policy inference
+across diverse embodiments with minimal supervision. To support scalable evaluation and training, GE-
+Sim serves as an action-conditioned neural simulator, producing high-fidelity rollouts for closed-loop
+policy development. The platform is further equipped with EWMBench, a standardized benchmark
+suite measuring visual fidelity, physical consistency, and instruction-action alignment. Together, these
+components establish Genie Envisioner as a scalable and practical foundation for instruction-driven,
+general-purpose embodied intelligence. All code, models, and benchmarks will be released publicly.
+1
+Introduction
+"The best way to predict the future is to invent it."
+— Alan Kay
+Embodied agents that sense, reason, and act in the physical world represent the next frontier of AI systems. At its core,
+a fundamental research challenge remains: developing scalable and robust robotic manipulation capabilities - the ability
+to purposefully interact with and control the physical environment through selective contact (Mason, 2001). Despite
+considerable progress has been made in this domain, ranging from analytic (Berenson et al., 2009; Stilman, 2007),
+model-based frameworks (Ebert et al., 2018; Janner et al., 2019; Nagabandi et al., 2020) to data-driven approaches that
+learn manipulation policies from large-scale datasets (Black et al., 2024; Brohan et al., 2023; Bu et al., 2025b; Kim et al.,
+2024), existing systems typically rely on a patchwork of separate data-collection, training, and evaluation stages. Each
+stage demands bespoke infrastructure, manual curation, and task-specific tuning; the resulting friction could potentially
+slow down iteration, obscure failure modes, and impede reproducibility at scale. These fragmented stages underscore
+the absence of an integrated framework capable of learning and evaluating manipulation policies in a unified manner.
+To this end, we introduce Genie Envisioner (GE), a unified platform that collapses robot sensing, policy learning,
+and evaluation into a single closed-loop video generative world model, as illustrated in Figure 1. At its core lies
+GE-Base, an instruction-conditioned, multi-view video diffusion model trained on approximately 3,000 hours of video-
+language paired data spanning over one million real-world robotic manipulation episodes from the AgiBot-World-Beta
+dataset (Bu et al., 2025a). Conditioned on robot’s visual observations, GE-Base autoregressively generates video chunks
+∗Equal Contribution. † Project Leader. ⋄Corresponding Author.
+arXiv:2508.05635v1  [cs.RO]  7 Aug 2025
+
+Generated Video
+Pick up
+Place
+…
+Genie Envisioner World Foundation Platform
+Action Chunk
+Execute
+Latent
+Features
+Action
+Condition
+Goal-directed Robotic Control
+Rendered Action Execution
+Observation
+Instruction
+Memory
+…
+Long-horizon 
+Context
+History Frames
+1M real-world robotic
+manipulation episodes
+Semantics
+Scene
+Motion
+Metric
+Multi-dimensional Toolkit
+Evaluate Embodied Video World Model
+Sampler
+diverse tasks from household and industrial domains
+perception, prediction, and control
+Comprehensive Evaluation Set
+Dataset
+spatial, temporal, and semantic dynamic aspects
+Evaluation Framework
+Tools
+Condition
+Action Policy
+Pour water
+Assemble box
+Fold clothes
+Left View
+Right View
+Head View
++
+AgiBot
++
+Action Models
+ACT
+GR1
+π0
+...
+Octo
+OpenVLA
+Wipe
+Pack
+Iron
+Insert
+Generation for Action Execution
+Instruction
+Close-loop 
+simulation
+...
+Powered by AgiBot World
+Figure 1: Overview of the Genie Envisioner World Foundation Platform. Genie Envisioner is a unified world
+foundation platform that integrates manipulation policy learning and evaluation within a single video-generative
+framework. At its core lies GE-Base, a large-scale world model that encodes the spatial, temporal, and semantic structure
+of robotic interactions. Built around it are two key functional modules: GE-Act, a world action model that infers
+instruction-conditioned policies, and GE-Sim, a video-based WORLD SIMULATOR that enables closed-loop execution
+through action-conditioned generation. The platform is complemented by EWMBench, an integrated evaluation suite
+that assesses visual fidelity, physical plausibility, and instruction-policy alignment. GE thus provides a practical and
+scalable foundation for general intelligence embodiment.
+that capture the temporal evolution of manipulation behaviors following high-level instructions. Leveraging robotic
+domain adaptation pretraining, GE-Base establishes a mapping from language instructions to an embodied visual space,
+capturing the essence of robotic manipulation by modeling the spatial, temporal, and semantic regularities of real-world
+interactions. It achieves this by inferring latent trajectories that jointly encode the robot’s perceptual inputs and the
+anticipated evolution of the scene under plausible action sequences. To bridge the gap between visual representations and
+executable robotic control, we introduce GE-Act, a lightweight parallel flow-matching action model. GE-Act translates
+visual latent features, conditioned on language instructions, into fine-grained and low-latency motor commands, enabling
+direct and efficient mapping from perception and instruction to executable physical actions. Beyond policy learning,
+simulation plays a critical role in enabling scalable training, safety validation, and fast iteration for robotic systems. To
+this end, we introduce GE-Sim, which leverages the embodied video generation capabilities of GE-Base and repurposes
+its generative dynamics into an action-conditioned WORLD SIMULATOR. GE-Sim supports closed-loop policy evaluation
+through video-based simulation, achieving speeds significantly faster than real-world execution. After designing the
+core foundation model, a critical challenge remains: evaluating whether the generated videos faithfully simulate robotic
+2
