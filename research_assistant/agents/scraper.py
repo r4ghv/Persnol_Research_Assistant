@@ -6,6 +6,7 @@ import tempfile
 import logging
 from typing import List, Dict, Optional, Tuple
 
+from .preprocessor import clean_pdf_text
 from .ranker import search_all_sources
 
 logger = logging.getLogger(__name__)
@@ -78,11 +79,12 @@ class Scraper:
                     os.remove(pdf_path)
 
             full_text = "\n".join(text)
+            cleaned = clean_pdf_text(full_text)
 
             with open(cache_file, "w", encoding="utf-8") as f:
-                f.write(full_text)
+                f.write(cleaned)
 
-            return full_text, pdf_data
+            return cleaned, pdf_data
         except Exception as e:
             logger.error(f"Error extracting content from '{paper.get('title', '')[:50]}': {e}")
             return paper.get("abstract", ""), None

@@ -3,6 +3,12 @@ from research_assistant.utils.file_utils import save_json, load_json, save_text,
 from research_assistant.agents.organizer import Organizer
 from research_assistant.agents.sources import _clean_query
 from research_assistant.agents.ranker import score_paper, _keyword_overlap, _recency_score
+from research_assistant.agents.preprocessor import (
+    clean_pdf_text,
+    detect_sections,
+    chunk_sections,
+    preprocess_and_chunk,
+)
 
 
 class TestSources:
@@ -43,6 +49,49 @@ class TestRanker:
         paper = {"title": "deep learning", "abstract": "about deep learning", "published": "2025-01-01", "source": "arXiv", "citation_count": None}
         score = score_paper(paper, "deep learning")
         assert 10 <= score <= 100
+
+
+class TestPreprocessor:
+    def test_clean_removes_page_numbers(self):
+        result = clean_pdf_text("Some text\n\n42\n\nMore text")
+        assert "42" not in result
+
+    def test_clean_removes_arxiv_id(self):
+        result = clean_pdf_text("Some text arXiv:2508.12345 and more")
+        assert "arXiv:2508.12345" not in result
+
+    def test_clean_removes_latex_cites(self):
+        result = clean_pdf_text("Prior work \\cite{smith2023} shows")
+        assert "\\cite" not in result
+
+    def test_clean_trims_references(self):
+        text = "Main content.\n\nReferences\n[1] Some citation\n[2] Another"
+        result = clean_pdf_text(text)
+        assert "References" not in result
+
+    def test_detect_sections(self):
+        text = "Abstract\nWe present a study.\n\nIntroduction\nThis is the intro."
+        sections = detect_sections(text)
+        labels = [s[0] for s in sections]
+        assert "abstract" in labels
+        assert "introduction" in labels
+
+    def test_chunk_sections_short_stays_whole(self):
+        chunks = chunk_sections([("abstract", "Short text.")])
+        assert len(chunks) == 1
+        assert "abstract" in chunks[0].lower()
+
+    def test_preprocess_and_chunk_pipeline(self):
+        text = "Abstract\nThis is a test paper.\n\nConclusion\nDone."
+        chunks = preprocess_and_chunk(text)
+        assert len(chunks) >= 1
+
+    def test_build_chunked_prompt_includes_title(self):
+        from research_assistant.agents.preprocessor import build_chunked_prompt
+        chunks = ["chunk one", "chunk two"]
+        prompt = build_chunked_prompt("Test Title", "Test Abstract", chunks)
+        assert "Test Title" in prompt
+        assert "Test Abstract" in prompt
 
 
 class TestOrganizer:
