@@ -5,7 +5,7 @@ import gradio as gr
 from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from research_assistant.agents import Summarizer, Organizer, Scraper
+from research_assistant.agents import Summarizer, Organizer, Scraper, DEFAULT_SOURCES
 from research_assistant.utils.config import Config
 from research_assistant.utils.logger import Logger
 
@@ -25,10 +25,10 @@ class ResearchAssistantApp:
         
         self.current_research = None
         
-    def research_topic(self, topic, max_papers, summary_style):
+    def research_topic(self, topic, max_papers, summary_style,
+                       use_arxiv, use_pubmed, use_s2):
         """Main research function triggered by Gradio"""
         try:
-            # Input validation
             if not topic or not topic.strip():
                 return "Please enter a research topic.", "", []
             topic = topic.strip()
@@ -36,11 +36,21 @@ class ResearchAssistantApp:
             if max_papers < 1 or max_papers > 20:
                 return "Please select between 1 and 20 papers.", "", []
             
+            sources = []
+            if use_arxiv:
+                sources.append("arXiv")
+            if use_pubmed:
+                sources.append("PubMed")
+            if use_s2:
+                sources.append("Semantic Scholar")
+            
+            if not sources:
+                return "Please select at least one source.", "", []
+            
             self.logger.log(f"Starting research on: {topic}")
             
-            # Step 1: Fetch papers from arXiv
-            self.logger.log(f"Fetching papers for topic: {topic}")
-            papers = self.scraper.fetch_papers(topic, max_papers)
+            self.logger.log(f"Fetching papers from {', '.join(sources)} for: {topic}")
+            papers = self.scraper.fetch_papers(topic, max_papers, sources=sources)
             
             if not papers:
                 error_msg = f"No papers found for topic: '{topic}'. Please try:\n"
@@ -114,8 +124,10 @@ class ResearchAssistantApp:
             report_path = self.organizer.save_report(report_data)
             
             # Format output for display
+            sources_used = set(p.get("source", "?") for p in papers)
             output_text = f"✅ Research completed on: {topic}\n\n"
             output_text += f"📊 Papers analyzed: {len(papers)}\n"
+            output_text += f"🔍 Sources: {', '.join(sorted(sources_used))}\n"
             output_text += f"📁 Report saved to: {report_path}\n\n"
             
             # Create interactive summary components
@@ -135,8 +147,11 @@ class ResearchAssistantApp:
         for i, summary_data in enumerate(summaries, 1):
             paper = summary_data['paper']
             summary = summary_data['summary']
+            rank = paper.get("_rank", i)
+            score = paper.get("_rank_score", "")
+            source = paper.get("source", "?")
+            score_display = f" ({score}/100)" if score else ""
             
-            # Create a formatted summary component
             summary_html = f"""
             <div style="
                 border: 2px solid #e0e0e0; 
@@ -145,7 +160,6 @@ class ResearchAssistantApp:
                 margin: 15px 0; 
                 background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
                 box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                transition: all 0.3s ease;
             ">
                 <div style="
                     display: flex; 
@@ -161,7 +175,16 @@ class ResearchAssistantApp:
                         font-size: 18px; 
                         font-weight: 600;
                         flex: 1;
-                    ">📄 Paper {i}: {paper['title']}</h3>
+                    ">#{rank} {paper['title']}</h3>
+                    <span style="
+                        background: #6c757d; 
+                        color: white; 
+                        padding: 4px 10px; 
+                        border-radius: 20px; 
+                        font-size: 12px; 
+                        font-weight: bold;
+                        margin-right: 6px;
+                    ">{source}</span>
                     <span style="
                         background: #007bff; 
                         color: white; 
@@ -169,7 +192,7 @@ class ResearchAssistantApp:
                         border-radius: 20px; 
                         font-size: 12px; 
                         font-weight: bold;
-                    ">{style.replace('_', ' ').title()}</span>
+                    ">{style.replace('_', ' ').title()}{score_display}</span>
                 </div>
                 
                 <div style="margin-bottom: 15px;">
@@ -312,6 +335,11 @@ class ResearchAssistantApp:
                                 label="Summary Style"
                             )
                         
+                        with gr.Row():
+                            source_arxiv = gr.Checkbox(value=True, label="arXiv")
+                            source_pubmed = gr.Checkbox(value=True, label="PubMed")
+                            source_s2 = gr.Checkbox(value=True, label="Semantic Scholar")
+                        
                         research_btn = gr.Button(
                             "🔍 Start Research", 
                             variant="primary", 
@@ -414,8 +442,8 @@ class ResearchAssistantApp:
             ">
                 <p style="margin: 0; color: #6c757d;">
                     🚀 Built with <strong>OpenAI GPT-4o-mini</strong> and <strong>Gradio</strong> | 
-                    📚 Research papers sourced from <strong>arXiv</strong> |
-                    🎨 Enhanced with interactive UI components
+                    📚 Sources: <strong>arXiv, PubMed, Semantic Scholar</strong> |
+                    🎨 Ranked by relevance, recency & quality
                 </p>
             </div>
             """)
@@ -423,7 +451,7 @@ class ResearchAssistantApp:
             # Event handlers
             research_btn.click(
                 fn=self.research_topic,
-                inputs=[topic_input, max_papers, summary_style],
+                inputs=[topic_input, max_papers, summary_style, source_arxiv, source_pubmed, source_s2],
                 outputs=[status_output, summary_output, gr.State()]
             )
         
