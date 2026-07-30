@@ -7,7 +7,7 @@ def test_imports():
         print("Testing imports...")
         
         # Test agent imports
-        from research_assistant.agents import Researcher, Summarizer, Organizer, Scraper
+        from research_assistant.agents import Summarizer, Organizer, Scraper
         print("✓ Agent imports successful")
         
         # Test utility imports

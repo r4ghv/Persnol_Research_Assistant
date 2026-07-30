@@ -3,7 +3,9 @@ import os
 import logging
 import gradio as gr
 from pathlib import Path
-from research_assistant.agents import Researcher, Summarizer, Organizer, Scraper
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from research_assistant.agents import Summarizer, Organizer, Scraper
 from research_assistant.utils.config import Config
 from research_assistant.utils.logger import Logger
 
@@ -16,9 +18,8 @@ class ResearchAssistantApp:
         self.config = Config()
         self.logger = Logger()
         
-        # Initialize agents
-        self.scraper = Scraper()
-        self.researcher = Researcher("")
+        # Initialize agents with config
+        self.scraper = Scraper(config=self.config)
         self.summarizer = Summarizer(self.config.OPENAI_API_KEY, self.config.OPENAI_MODEL)
         self.organizer = Organizer(str(self.config.OUTPUT_DIR))
         
@@ -27,6 +28,14 @@ class ResearchAssistantApp:
     def research_topic(self, topic, max_papers, summary_style):
         """Main research function triggered by Gradio"""
         try:
+            # Input validation
+            if not topic or not topic.strip():
+                return "Please enter a research topic.", "", []
+            topic = topic.strip()
+            max_papers = int(max_papers)
+            if max_papers < 1 or max_papers > 20:
+                return "Please select between 1 and 20 papers.", "", []
+            
             self.logger.log(f"Starting research on: {topic}")
             
             # Step 1: Fetch papers from arXiv
@@ -41,33 +50,46 @@ class ResearchAssistantApp:
                 error_msg += "• Trying again later (arXiv may be temporarily unavailable)"
                 return error_msg, "", []
             
-            # Step 2: Extract content from papers
+            # Step 2: Extract content from papers (parallel)
             self.logger.log(f"Extracting content from {len(papers)} papers...")
-            paper_contents = []
-            for i, paper in enumerate(papers, 1):
-                self.logger.log(f"Processing paper {i}/{len(papers)}: {paper['title'][:50]}...")
-                content = self.scraper.extract_content(paper)
-                paper_contents.append({
-                    'paper': paper,
-                    'content': content
-                })
+            paper_contents = [None] * len(papers)
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = {}
+                for i, paper in enumerate(papers):
+                    future = executor.submit(self.scraper.extract_content, paper)
+                    futures[future] = i
+                for future in as_completed(futures):
+                    i = futures[future]
+                    content, pdf_data = future.result()
+                    paper_contents[i] = {
+                        'paper': papers[i],
+                        'content': content,
+                        'pdf_data': pdf_data
+                    }
             
-            # Step 3: Generate summaries
-            self.logger.log(f"Generating summaries for {len(paper_contents)} papers...")
-            summaries = []
-            for i, paper_data in enumerate(paper_contents, 1):
-                self.logger.log(f"Summarizing paper {i}/{len(paper_contents)}: {paper_data['paper']['title'][:50]}...")
-                summary = self.summarizer.summarize(
-                    paper_data['paper']['title'],
-                    paper_data['paper']['abstract'],
-                    paper_data['content'],
-                    summary_style
-                )
-                summaries.append({
-                    'paper': paper_data['paper'],
-                    'summary': summary,
-                    'content': paper_data['content']
-                })
+            # Step 3: Generate summaries (parallel)
+            self.logger.log(f"Generating summaries for {len(papers)} papers...")
+            summaries = [None] * len(paper_contents)
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = {}
+                for i, paper_data in enumerate(paper_contents):
+                    future = executor.submit(
+                        self.summarizer.summarize,
+                        paper_data['paper']['title'],
+                        paper_data['paper']['abstract'],
+                        paper_data['content'],
+                        summary_style
+                    )
+                    futures[future] = i
+                for future in as_completed(futures):
+                    i = futures[future]
+                    paper_data = paper_contents[i]
+                    summaries[i] = {
+                        'paper': paper_data['paper'],
+                        'summary': future.result(),
+                        'content': paper_data['content'],
+                        'pdf_data': paper_data['pdf_data']
+                    }
             
             # Step 4: Organize files
             saved_files = []
@@ -75,14 +97,15 @@ class ResearchAssistantApp:
                 saved_paths = self.organizer.save_paper(
                     summary_data['paper'],
                     summary_data['content'],
-                    summary_data['summary']
+                    summary_data['summary'],
+                    pdf_data=summary_data.get('pdf_data')
                 )
                 saved_files.append(saved_paths)
             
             # Step 5: Generate research report
             report_data = {
                 'topic': topic,
-                'timestamp': str(Path().cwd()),
+                'timestamp': datetime.now().isoformat(),
                 'papers_analyzed': len(papers),
                 'papers': summaries,
                 'files_saved': saved_files
@@ -242,7 +265,7 @@ class ResearchAssistantApp:
             
             components.append(summary_html)
         
-        return components
+        return "\n".join(components)
     
     def create_interface(self):
         """Create and return the Gradio interface"""
