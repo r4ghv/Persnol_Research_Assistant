@@ -1,0 +1,1117 @@
+TurnSight: Turn-Level Hindsight Self-Distillation for Tool-Integrated Reasoning
+Changle Qu1, Sunhao Dai1, Hengyi Cai2, Yuqi Zhou1, Xinran Chen2, Simon2, Jun Xu1
+1Gaoling School of Artificial Intelligence, Renmin University of China 2Baidu Inc.
+{changlequ,junxu}@ruc.edu.cn
+Abstract
+Tool-Integrated Reasoning (TIR) enables LLMs to solve com-
+plex tasks through iterative tool interactions. However, exist-
+ing reinforcement learning methods often rely on trajectory-
+level supervision, limiting fine-grained credit assignment in
+long-horizon TIR scenarios. On-policy self-distillation offers
+denser signals through teacher branches with privileged con-
+text, but existing approaches typically derive such context
+from ground-truth answers or retrieved skills, which may not
+reflect the states actually visited by the agent. Moreover, token-
+level supervision fails to capture the turn-level structure of
+tool interactions. To address this, we propose TurnSight, a
+turn-level hindsight self-distillation framework that derives
+supervision directly from execution-conditioned hindsight. It
+then constructs multiple hindsight views with different looka-
+head horizons and selects reliable supervision through cross-
+horizon directional agreement. Finally, the selected hindsight
+signal is normalized across sibling rollouts and used to adap-
+tively modulate RL advantages while preserving their original
+optimization direction. Extensive experiments on three bench-
+marks demonstrate the effectiveness of TurnSight. Our codes
+are available at https://github.com/quchangle1/TurnSight.
+Introduction
+Tool-Integrated Reasoning (TIR) enables large language
+models (LLMs) to solve complex tasks by interleaving rea-
+soning with external tool interactions (Gou et al. 2024; Qu
+et al. 2025a,b). Unlike single-step generation, a TIR agent
+repeatedly selects tools, constructs arguments, observes exe-
+cution results, and adapts its subsequent behavior. These in-
+teractions substantially expand the capabilities of LLMs, but
+also create a difficult temporal credit-assignment problem:
+the final task outcome reveals whether a trajectory succeeded,
+yet provides little information about which intermediate tool
+interactions are useful, redundant, or harmful.
+Reinforcement learning with verifiable rewards (RLVR)
+provides a natural framework for training TIR agents (Chang
+et al. 2026; Jiang et al. 2026). However, as shown in Fig-
+ure 1(a), outcome-based methods such as GRPO typically
+propagate a single trajectory-level advantage to all gener-
+ated actions, assigning similar credit to decisions with very
+different causal effects (Shao et al. 2024; Zeng et al. 2025).
+Copyright © 2027, All rights reserved.
+(a) Trajectory-Level RL
+Same Advantage
+(b) Existing OPSD
+Privileged 
+Context
+Token-level
+(c) TurnSight (Ours)
+d=1
+d=2
+d=1
+Turn-level
+Turn-level
+: Correct Turn
+: Wrong Turn
+: Tool Response
+: Student
+: Teacher
+Hindsight
+Figure 1: Comparison of credit assignment strategies for TIR.
+(a) Trajectory-level RL assigns identical credit to all turns. (b)
+Existing OPSD may use state-misaligned privileged context
+and produce conflicting token-level signals. (c) TurnSight de-
+rives coherent turn-level credit from execution-conditioned
+hindsight across multiple lookahead depths.
+Recent methods provide denser supervision by matching gen-
+erated tool calls against annotated or reference tool trajecto-
+ries (Qian et al. 2025; Qu et al. 2026). Although effective,
+such supervision assumes that the reference action remains
+appropriate at the state visited by the learned policy. This as-
+sumption becomes fragile in multi-turn interaction: once the
+agent makes a different tool call, the environment changes,
+and subsequent states may diverge from the reference tra-
+jectory. Thus, effective credit assignment for TIR requires
+supervision that is both fine-grained and state-aligned.
+On-policy self-distillation (OPSD) (Shenfeld et al. 2026;
+Li et al. 2026b; Kim et al. 2026) offers a promising way to ob-
+tain such supervision. It evaluates student-generated behav-
+ior using a privileged view available only during training,
+thereby providing feedback on on-policy states rather than
+prescribing an external trajectory. However, applying OPSD
+to multi-turn TIR is nevertheless non-trivial. As shown in
+Figure 1(b), existing methods often enrich the teacher with
+globally informative context, such as ground-truth answers,
+reference rollouts, or distilled skills (Zhao et al. 2026; Hübot-
+ter et al. 2026; Lu et al. 2026; Ye et al. 2026b). These signals
+describe how to solve the task, but not whether a tool interac-
+tion was appropriate at the state where it occurred. This mis-
+  [cs.CL]  4 Aug 2026
+
+match is especially pronounced in TIR, where each tool call
+changes the external environment and may cause subsequent
+states to diverge from the reference path. In this setting, the
+trajectory itself contains the most state-aligned supervision,
+with tool execution outcomes serving as hindsight signals.
+State alignment alone is insufficient, however. Existing
+self-distillation methods generally produce token-level sig-
+nals, whereas the fundamental decision unit in TIR is a com-
+plete tool interaction, comprising reasoning, tool selection,
+and argument construction. Within a turn, token-level super-
+vision can vary in magnitude or even sign due to formatting
+tokens and argument-level variations. Optimizing these sig-
+nals independently can therefore assign conflicting credit
+within the same interaction. This motivates our turn-level
+formulation, which aggregates hindsight supervision at the
+interaction level to provide more coherent credit assignment.
+In this paper, we propose TurnSight, a turn-level hindsight
+self-distillation method for multi-turn TIR. Instead of rely-
+ing on external reference trajectories, TurnSight constructs
+hindsight supervision directly from on-policy tool execution
+outcomes. To better match the decision granularity of multi-
+turn TIR, it first aggregates token-level hindsight evidence
+into coherent turn-level signals. It then constructs multiple
+hindsight views with different lookahead horizons and se-
+lects reliable supervision through cross-horizon directional
+agreement. Finally, the selected hindsight signal is normal-
+ized across sibling rollouts and used to construct bounded,
+sign-aware weights that modulate RL advantages without
+changing their optimization direction. As a result, TurnSight
+introduces no auxiliary imitation objective, is independent of
+the underlying reward construction, and can be seamlessly
+integrated with existing policy-gradient RL algorithms.
+Extensive experiments on both in-domain and out-of-
+domain benchmarks verify the effectiveness of TurnSight
+and its ability to generalize across diverse tool-use scenar-
+ios. In summary, our main contributions are as follows:
+• We formulate two requirements for credit assignment in
+multi-turn TIR: supervision should be aligned with on-policy
+execution states and coherent at the interaction level.
+• We propose TurnSight, which derives execution-
+conditioned, multi-horizon hindsight assessments to mod-
+ulate RL advantages without changing their direction.
+• Extensive experiments on both in-domain and out-of-
+domain benchmarks demonstrate the effectiveness, robust-
+ness, and generalization ability of TurnSight.
+Related Work
+Tool-Integrated Reasoning
+Recent RLVR methods, particularly GRPO-style algorithms
+(Shao et al. 2024; Yu et al. 2025), have emerged as an ef-
+fective paradigm for improving TIR by directly optimizing
+models with task-level feedback (Wang et al. 2025; Xue et al.
+2026; Qu et al. 2025b). Early approaches typically rely on
+sparse outcome rewards (Li, Zou, and Liu 2025; Feng et al.
+2025) or trajectory-level supervision (Qian et al. 2025; Zhang
+et al. 2025; Zeng et al. 2025; Wei et al. 2025), where all
+reasoning turns within a trajectory receive identical advan-
+tage signals, limiting fine-grained credit assignment. Recent
+efforts improve this by introducing turn-level supervision
+through LLM-based evaluation (Wang et al. 2026a) or by
+comparing predicted tool calls with ground-truth tool exe-
+cutions (Qu et al. 2026). However, these methods rely on
+annotated or reference tool trajectories, making optimization
+closer to imitation learning and limiting exploration. In con-
+trast, TurnSight combines RL with on-policy self-distillation
+to achieve fine-grained credit assignment without ground-
+truth trajectories while preserving exploration.
+On-Policy Self-Distillation
+On-policy self-distillation evaluates student-generated tra-
+jectories using a privileged teacher view constructed from
+the same model with additional information, providing dense
+supervision on the states visited by the student (Sang et al.
+2026; Ma et al. 2026; Li et al. 2026a; Wang et al. 2026b).
+Rather than directly matching the teacher distribution, re-
+cent methods use teacher–student disagreement to reweight
+RL advantages, allocate fine-grained credit, or bound distil-
+lation interventions (Yang et al. 2026; Zhang, Lin, and Wu
+2026; Ding, Xin, and Weinstein 2026; Zhou et al. 2026b,a).
+Despite these advances, existing methods often rely on glob-
+ally informative teacher signals and token-level distillation,
+which may not provide state-aligned supervision at the nat-
+ural turn-level granularity of TIR. In contrast, we propose
+TurnSight, which constructs turn-level hindsight supervision
+directly from on-policy tool execution outcomes, enabling
+fine-grained and state-aligned credit assignment.
+Preliminaries
+In this section, we first formulate the task of TIR, followed
+by the agentic RL framework and the OPSD mechanism.
+Task Formulation
+Given a user prompt q ∼D and a set of M tools T =
+{t1, . . . , tM}, where each tool is specified by its name and
+argument schema, an agent with policy πθ interacts with an
+environment to produce a trajectory τ = (s1, . . . , sK). We
+represent a non-terminal turn as sk = (nk, Ck, ok), where
+nk is the natural-language reasoning and Ck is the set of
+tool calls issued in that turn. Each call contains a tool name
+and a JSON argument object. A trajectory terminates when
+the policy emits its final answer or reaches the pre-defined
+maximum turn limit L. For the terminal turn, CK = ∅and
+oK = ∅. Our goal is to achieve fine-grained turn-level credit
+assignment by leveraging execution-aware supervision.
+Agentic Reinforcement Learning
+We optimize the agent policy πθ using GRPO (Shao et al.
+2024). For each prompt q ∼D, the behavior policy πθold
+samples a group of G interaction trajectories {τi}G
+i=1. Rather
+than training an additional critic to predict state values,
+GRPO constructs policy-gradient advantages by comparing
+the rewards of trajectories generated for the same prompt.
+This group-wise comparison provides a prompt-dependent
+baseline and reduces the cost of value-function estimation.
+
+Rollout
+think
+tool 
+call
+Turn 1
+think
+answer
+Turn K
+(a) Multi-Turn TIR
+Policy LLM
+Dataset
+Environment
+tool 
+response
+(b) Execution Hindsight
+Student View
+t-2
+t-1
+t …
+Execution Hindsight
+t-1
+t …
+Teacher View
+Base Advantage:
+(c) Multi-lookahead teacher selection
+Teacher (d=1, current tool result) 
+Teacher (d=2, current + next)
+Teacher (d=3, longer future)
+Direction-Consistent Teacher Selection
+Majority 
+Voting
+Strongest
+(d) Group-Normalized Weight
+Group-Relative Evidence Normalization
+Norm.
+Bounded Sign-Aware Weighting
+
+Advantage Integration
+Figure 2: The illustration of our proposed turn-level hindsight self-distillation framework TurnSight for TIR.
+The optimization objective is written as
+JGRPO(θ) = Eq∼D,{τi}∼πθold(·|q)
+
+i=1
+
+|τi|
+|τi|
+t=1
+min(
+ρi,t ˆAi,t, clip(ρi,t, 1 −ϵ, 1 + ϵ) ˆAi,t) −βDKL(πθ|πref)
+where ρi,t =
+πθ(τi,t|q,τi,<t)
+πθold(τi,t|q,τi,<t) is the importance sampling
+ratio, bAi,t is the normalized group-relative advantage, ϵ is
+the clipping parameter, and β controls the KL regularization
+toward the reference policy πref. Since trajectories contain
+both model-generated actions and environment observations,
+only tokens generated by the policy are optimized, while
+observation tokens are excluded from gradient computation.
+On-Policy Self-Distillation
+OPSD scores a trajectory sampled by the student under two
+information conditions. At token position t, the student dis-
+tribution pS
+= πθ(· | ct) uses only rollout information,
+while the detached teacher distribution pT
+t = πT (· | c+
+t ) ad-
+ditionally accesses privileged training-time information. For
+a sampled token yt, we define the log-probability gap as
+δt = log πT (yt | c+
+t ) −log πθ(yt | ct).
+(1)
+The gap δt captures how privileged information changes
+confidence in the realized token. Unlike direct distribution
+matching, which lets the teacher determine the update direc-
+tion, our method uses δt as hindsight evidence that modulates
+RL advantage magnitudes while preserving their directions.
+Our Approach: TurnSight
+In this section, we will provide a detailed introduction to our
+TurnSight. The overall framework is illustrated in Figure 2.
+Execution-Conditioned Hindsight Construction
+Execution-Conditioned Privileged Context. In multi-turn
+TIR, each tool execution changes the environment and af-
+fects subsequent states. Existing privileged context sources,
+such as ground-truth answers and reference rollouts, are not
+conditioned on the student’s trajectory and may provide mis-
+aligned supervision. We therefore construct privileged con-
+text directly from the execution outcomes generated by the
+student’s own trajectory, which are naturally aligned with its
+visited states and provide informative hindsight for subse-
+quent policy optimization. Specifically, consider a token yi,t
+in turn k of trajectory τi. The student scores this token un-
+der its original causal context ci,t, which contains only the
+information available during rollout. For a lookahead depth
+d, we collect the execution hindsight block
+H(d)
+i,k =
+(Ci,k, oi,k), . . . , (Ci,¯k, oi,¯k)
+where Ci,j denotes the tool calls issued by the student in
+turn j, oi,j denotes the corresponding tool responses, and
+¯k = min(k + d −1, Ki). So the privileged context is
+c+(d)
+i,t
+= ci,t ⊕H(d)
+i,k ,
+where the hindsight block is used only during training while
+the reference branch teacher-forces the original student re-
+sponse. We instantiate this branch with a frozen initial ref-
+erence policy πref. For each lookahead depth d ∈DH, we
+compute the detached sampled-token gap
+δ(d)
+i,t = log πref(yi,t | c+(d)
+i,t
+) −log πθ(yi,t | ci,t).
+A positive gap indicates that observing the execution con-
+sequences increases the reference branch’s confidence in the
+realized token, whereas a negative gap indicates the opposite.
+Turn-Level Aggregation. Although hindsight gaps are com-
+puted at the token level, the natural decision unit in multi-turn
+TIR is an interaction turn, where reasoning, tool selection,
+and argument generation together constitute one tool-use de-
+cision. In practice, token-level hindsight signals within the
+same turn often vary substantially or even disagree due to for-
+matting tokens and argument variations. Applying these sig-
+nals independently may therefore produce inconsistent credit
+assignment. To preserve the semantic coherence of each in-
+teraction, we aggregate token-level hindsight into a turn-level
+signal. Let Yi,k = {t : κi(t) = k} denote the token positions
+belonging to turn k. For each lookahead depth, we compute
+¯δ(d)
+i,k =
+
+|Yi,k|
+t∈Yi,k
+δ(d)
+i,t .
+
+The resulting ¯δ(d)
+i,k provides a single hindsight assessment for
+the entire interaction turn, which is subsequently shared by
+all policy tokens in that turn and serves as the basic evidence
+unit for multi-lookahead teacher selection.
+Multi-Lookahead Teacher Selection
+Multi-Lookahead Hindsight Views. The amount of future
+information required to evaluate a tool-use decision varies
+across interaction states in multi-turn TIR. Some decisions,
+such as validating tool selection or argument correctness,
+can be assessed immediately from execution feedback, while
+others require subsequent tool interactions to reveal their util-
+ity. Consequently, no single hindsight horizon is suitable for
+every interaction state: short horizons may overlook delayed
+effects, while long horizons may introduce unrelated future
+interactions and dilute the evidence for the current decision.
+To capture these diverse temporal dependencies, we con-
+struct multiple execution-conditioned hindsight contexts
+with lookahead depths DH = {1, 2, 3}. Each lookahead
+depth instantiates an independent hindsight teacher by ex-
+posing the frozen reference policy to different amounts of
+future execution information, yielding a turn-level hindsight
+signal ¯δ(d)
+i,k . Collectively, these teachers provide complemen-
+tary assessments of the same tool-use decision, with shal-
+low horizons emphasizing immediate execution quality and
+deeper ones reflecting downstream trajectory contributions.
+Direction-Consistent Teacher Selection. Since teachers ob-
+serve different amounts of future information, their hind-
+sight assessments may disagree for the same interaction turn.
+Treating all teachers equally may weaken informative su-
+pervision, while selecting the strongest teacher alone may
+amplify an isolated and unreliable assessment. We therefore
+perform teacher selection in two stages: we first determine the
+reliable supervision direction through cross-horizon agree-
+ment and then select the strongest teacher within that direc-
+tion. For each turn, we first map teacher signal to its direction
+s(d)
+i,k =
++1,
+¯δ(d)
+i,k ≥0,
+−1,
+¯δ(d)
+i,k < 0.
+We then determine the consensus direction by majority
+voting over {s(d)
+i,k}d∈DH and select the teacher with the largest
+hindsight signal among those consistent with the consensus:
+i,k = arg
+max
+d∈DH:
+s(d)
+i,k=vi,k
+¯δ(d)
+i,k
+¯δ∗
+i,k = ¯δ
+(d∗
+i,k)
+i,k
+where vi,k denotes the majority direction.
+Directional agreement filters out isolated teachers whose
+assessments conflict with the majority of hindsight views,
+while selecting the strongest consistent teacher preserves the
+most informative supervision without diluting it through in-
+discriminate fusion. The ¯δ∗
+i,k is used as the final hindsight
+signal and is subsequently passed to group normalization.
+Group-Normalized Weight Construction
+Group-Relative Evidence Normalization. Although the se-
+lected hindsight signal ¯δ∗
+i,k provides a turn-level assessment
+of each tool interaction, its magnitude is not directly compa-
+rable across trajectories. The teacher–student gap is affected
+by factors such as prompt difficulty, trajectory length, turn
+position, and training progress. Consequently, directly using
+the raw gap may overemphasize naturally large-scale exam-
+ples instead of reflecting their relative hindsight evidence.
+Inspired by GRPO, we normalize the selected hindsight
+evidence within each prompt group. Instead of grouping in-
+teractions by turn index, we compute a shared mean µδ
+qi and
+standard deviation σδ
+qi over the selected token-level gaps from
+all valid turns and policy tokens across all sibling rollouts
+sampled for query qi. The normalized signal is
+bδi,k =
+¯δ∗
+i,k −µδ
+σδqi + ϵ .
+The normalized signal measures the relative hindsight
+evidence of the current turn against all valid interactions
+across sibling on-policy rollouts for the same query, reduc-
+ing prompt-specific scale variation and making the signal
+more comparable across queries and throughout training.
+Bounded Sign-Aware Weighting. The normalized hindsight
+signal is used to modulate the RL credit assigned by the base
+advantage. We therefore construct a bounded weight
+wi,t = 1 + ϵw tanh
+sign
+ Abase
+i,t
+ bδi,k
+The sign term aligns hindsight evidence with the update
+direction determined by the base advantage. Consequently,
+agreement between hindsight and the RL signal increases
+the update magnitude (wi,t > 1), whereas disagreement at-
+tenuates it (wi,t < 1). To mitigate the influence of extreme
+hindsight signals, we further introduce a bounded modula-
+tion mechanism, where ϵw controls the adjustment range:
+wi,t ∈[1 −ϵw, 1 + ϵw].
+Policy Optimization
+Advantage Integration. To incorporate turn-level hindsight
+while preserving the original RL objective, we interpolate
+the base advantage with its hindsight-modulated counterpart.
+For a token at position t belonging to turn k within the i-th
+rollout, the integrated advantage is defined as
+eAi,t = Abase
+i,t
+[(1 −λ) + λwi,t] ,
+where λ controls the strength of hindsight modulation.
+Objective Function. We retain the standard GRPO objective
+and replace the original advantage with eAi,t:
+JTurnSight(θ) = Eq∼D,{τi}∼πθold(·|q)
+
+i=1
+
+|τi|
+|τi|
+t=1
+min(
+ρi,t eAi,t, clip(ρi,t, 1 −ϵ, 1 + ϵ) eAi,t)
+Experiments
+In this section, we first describe the experimental setups and
+then conduct an extensive evaluation of our TurnSight.
+
+Methods
+FTRL
+BFCL
+ToolHop
+Avg.
+Solve-P
+Solve-R
+Solve-F1
+Avg.
+Multi-Turn
+Agentic
+Avg.
+Acc.
+Base
+Search
+Memory
+Qwen3-4B
+Vanilla
+30.78
+29.65
+25.85
+28.76
+37.00
+36.00
+31.50
+22.50
+9.00
+19.14
+22.91
+23.22
+24.96
+GRPO
+31.61
+32.64
+28.49
+30.91
+42.00
+34.00
+29.00
+23.50
+8.00
+19.35
+22.90
+21.98
+25.26
+ToolRL
+34.07
+31.63
+27.94
+31.21
+43.00
+41.00
+27.50
+25.50
+8.50
+24.09
+25.27
+23.65
+26.71
+MatchTIR
+37.77
+36.44
+33.51
+35.91
+51.00
+44.00
+30.50
+38.00
+18.50
+23.01
+30.82
+37.56
+34.76
+SDPO
+31.35
+32.66
+27.71
+30.57
+43.50
+41.50
+31.00
+29.50
+8.00
+22.15
+25.73
+26.53
+27.61
+RLSD
+34.19
+32.63
+31.13
+32.65
+45.50
+39.00
+33.50
+31.00
+12.00
+21.93
+27.11
+33.30
+31.02
+SDAR
+33.67
+37.03
+31.95
+34.22
+47.00
+40.50
+30.50
+37.00
+16.00
+22.80
+29.07
+37.36
+33.55
+SOD
+31.89
+34.91
+30.66
+32.49
+38.50
+34.00
+28.00
+24.50
+9.50
+21.72
+23.43
+22.28
+26.06
+TurnSight (Ours)
+44.61
+40.16
+38.44
+41.00
+50.50
+46.50
+36.00
+41.00
+21.00
+24.73
+33.18
+38.29
+37.51
+Qwen3-8B
+Vanilla
+28.08
+36.55
+29.74
+31.46
+46.50
+49.50
+38.50
+36.00
+10.50
+21.29
+29.26
+34.07
+31.60
+GRPO
+35.97
+39.78
+35.02
+36.92
+45.50
+43.00
+31.50
+32.00
+8.50
+22.15
+26.66
+29.21
+30.93
+ToolRL
+35.22
+43.72
+37.53
+38.82
+56.00
+49.00
+33.00
+35.50
+17.00
+20.64
+31.10
+35.68
+35.20
+MatchTIR
+40.88
+46.64
+40.83
+42.78
+57.00
+49.00
+37.00
+39.50
+20.00
+23.87
+33.78
+40.54
+39.03
+SDPO
+38.13
+42.72
+36.20
+39.02
+43.00
+41.00
+33.50
+32.00
+9.00
+20.00
+25.94
+35.21
+33.39
+RLSD
+36.92
+40.53
+36.98
+38.14
+46.50
+45.50
+33.00
+36.00
+16.00
+26.02
+30.63
+38.29
+35.69
+SDAR
+35.02
+44.23
+36.72
+38.66
+54.00
+51.00
+38.50
+38.50
+20.00
+25.38
+34.09
+41.37
+38.04
+SOD
+30.08
+40.92
+32.58
+34.53
+50.00
+44.50
+34.50
+35.00
+13.00
+19.14
+28.54
+33.64
+32.23
+TurnSight (Ours)
+46.99
+50.71
+43.07
+46.92
+59.50
+51.50
+42.00
+45.00
+23.50
+27.74
+37.56
+41.58
+42.02
+Table 1: Main results of TurnSight and baseline methods across three benchmarks using two LLM backbones. For BFCL, MF,
+MP, and LC denote the Miss Function, Miss Parameter, and Long Context subsets, respectively. The best and second-best results
+in each column are shown in bold and underlined, respectively.
+Experimental Setups
+Training Data. We use the FTRL dataset (Ye et al. 2026a) for
+all post-training experiments. It provides more than 2,000 au-
+tomatically generated problems paired with executable tool
+environments and programmatically verifiable feedback. The
+dataset covers single-step tool calls, sequential reasoning
+over multiple tools, and parallel tool invocations.
+Evaluation Benchmarks. We evaluate TurnSight on three
+benchmarks covering both in-domain and out-of-domain set-
+tings. FTRL serves as the in-domain benchmark, whereas
+BFCL (Patil et al. 2025) and ToolHop (Ye et al. 2025) are
+used for out-of-domain evaluation. Together, these bench-
+marks assess the model’s ability to generalize beyond the
+task distributions and patterns encountered during training.
+Baselines. To evaluate the effectiveness of TurnSight, we
+compare it with two families of baselines. The first in-
+cludes RL methods for TIR: Vanilla (Yang et al. 2025),
+GRPO (Shao et al. 2024), ToolRL (Qian et al. 2025), and
+MatchTIR (Qu et al. 2026), which provide supervision at the
+outcome, trajectory, and turn levels, respectively. The second
+comprises representative self-distillation methods, including
+SDPO (Hübotter et al. 2026), RLSD (Yang et al. 2026),
+SDAR (Lu et al. 2026), and SOD (Zhong et al. 2026), which
+leverage privileged contexts to guide RL optimization.
+Implementation Details. We conduct experiments with
+Qwen3-4B and Qwen3-8B as the policy backbones (Yang
+et al. 2025). All experiments are implemented with the verl
+framework (Sheng et al. 2025) and initialized directly from
+the corresponding base checkpoints, without an intermediate
+supervised fine-tuning stage. Each optimization batch con-
+tains 32 queries, with 16 trajectories sampled per query and
+at most 10 interaction turns per trajectory. We do not apply
+an explicit KL-divergence regularizer to constrain the policy
+updates and train for 3 epochs on 8 NVIDIA A800 GPUs
+with 80 GB memory each. For TurnSight, both the mixing
+coefficient λ and the modulation bound ϵw are set to 0.5.
+We construct 3 execution-conditioned teacher views using 3
+lookahead depths. All teacher and reference branches are ini-
+tialized from the corresponding policy backbone and remain
+frozen throughout RL training. Since RLSD and TurnSight
+are agnostic to the underlying RL algorithm and can be com-
+bined with different policy-optimization methods, we use
+MatchTIR as the RL backbone for both.
+Experimental Results
+Table 1 reports the results on three benchmarks, from which
+we make the following observations:
+• Firstly, RL consistently improves tool-use performance,
+while outcome-only optimization generalizes poorly. Com-
+pared with the vanilla Qwen3 models, all RL post-training
+methods achieve clear gains on the in-domain FTRL bench-
+mark, demonstrating the effectiveness of RL for optimizing
+multi-turn tool-use behaviors. However, GRPO often exhibits
+noticeably weaker performance on the out-of-domain BFCL
+and ToolHop benchmarks, indicating that outcome-level re-
+wards are insufficient for identifying which intermediate tool
+interactions should receive credit.
+• Secondly, fine-grained credit assignment consistently
+
+Variant
+Solve-P Solve-R Solve-F1
+Avg.
+TurnSight
+46.99
+50.71
+43.07
+46.92
+w/o turn-level aggregation
+41.61
+47.53
+40.54
+43.23
+w/o group normalization
+42.84
+48.02
+40.09
+43.65
+w/o multi-teacher selection
+44.26
+50.24
+42.35
+45.62
+Table 2: Ablation study of the core components.
+leads to stronger and more transferable policies. Compared
+with vanilla GRPO, methods equipped with structured tool-
+level supervision achieve consistently better performance
+across both model scales, confirming the importance of fine-
+grained credit signals for long-horizon TIR. The strong per-
+formance of MatchTIR further shows that accurate turn-level
+supervision is highly effective, making it a strong baseline
+for evaluating on-policy hindsight methods.
+• Thirdly, simply combining on-policy self-distillation
+with RL is insufficient for effective TIR. Although SDPO,
+RLSD, and SDAR consistently outperform vanilla GRPO,
+they still lag behind methods with explicit turn-level credit
+assignment. This suggests that privileged information from
+ground-truth trajectories or successful rollouts cannot di-
+rectly provide accurate supervision for every intermediate
+decision, especially in long-horizon tool interactions. More-
+over, token-level self-distillation may introduce conflicting
+credit signals within the same interaction turn. These results
+highlight the importance of aggregating hindsight supervi-
+sion at the turn level to provide reliable credit assignment.
+• Finally, TurnSight achieves the best overall performance
+while remaining fully on-policy. Across the three bench-
+marks, TurnSight consistently outperforms all baselines and
+establishes new state-of-the-art results on the 8B model, im-
+proving the previous best method by 7.7% in overall average
+performance. Notably, the largest improvements are observed
+on challenging BFCL subsets such as Long Context and Miss
+Parameter, where successful tool use requires accurately at-
+tributing credit across multiple interaction turns. These re-
+sults demonstrate that TurnSight effectively combines the
+exploration benefits of on-policy RL with fine-grained hind-
+sight supervision, enabling more accurate credit assignment
+without relying on reference trajectories.
+Ablation Study
+To quantify the contribution of each component, we con-
+duct an ablation study on Qwen3-8B, with results reported
+in Table 2. Removing any component consistently degrades
+performance, confirming the significance of each element:
+w/o turn-level aggregation refers to a variant that removes
+turn-level aggregation and instead selects the best execution-
+conditioned hindsight view for each token independently,
+using token-level signals to modulate the RL advantage. The
+significant performance drop shows that multi-turn TIR is
+naturally organized around interaction turns rather than in-
+dividual tokens. Applying supervision independently at the
+token level can introduce conflicting credit signals within
+the same tool interaction, whereas aggregating hindsight ev-
+idence at turn level produces more reliable credit assignment.
+Solve-P
+Solve-R
+Solve-F1
+Avg.
+Tool only
+Tool + answer
+Answer only
+46.99
+50.71
+43.07
+46.92
+40.87
+43.92
+37.89
+40.89
+39.72
+47.81
+40.87
+42.80
+37.5
+40.0
+42.5
+45.0
+47.5
+50.0
+Performance (%)
+Figure 3: Effect of hindsight context composition. Darker
+cells indicate stronger performance.
+w/o group normalization is a variant that removes group
+normalization and directly uses the selected turn-level hind-
+sight signal to modulate the RL advantage. The noticeable
+degradation demonstrates that the magnitude of hindsight
+signals varies substantially across rollout groups. Group nor-
+malization calibrates these signals into a comparable scale,
+leading to more stable and reliable credit assignment.
+w/o multi-teacher selection denotes the variant that re-
+places the multi-lookahead teacher with a single execution-
+conditioned teacher using one fixed lookahead depth. The
+performance drop indicates that different lookahead depths
+provide complementary hindsight information: shorter hori-
+zons capture the immediate quality of a tool interaction,
+while longer horizons reveal delayed consequences that only
+become apparent after subsequent reasoning and tool use.
+Overall, these results demonstrate that the effectiveness
+of TurnSight comes from the coordinated design of turn-
+level aggregation, group normalization, and multi-lookahead
+supervision, which together produce hindsight signals that
+are more coherent, comparable, and temporally informative.
+Further Analysis
+Hindsight Context Composition. To evaluate which type
+of privileged information provides the most effective hind-
+sight supervision, we compare three teacher context config-
+urations: tool result only, tool result + ground-truth answer,
+and ground-truth answer only, while keeping all other set-
+tings unchanged. As shown in Figure 3, using only the tool
+result consistently achieves the best performance. Interest-
+ingly, adding the ground-truth answer further degrades per-
+formance, suggesting that more privileged information does
+not necessarily provide better supervision. We attribute this
+to the fact that tool results provide direct, state-aligned ev-
+idence for evaluating the current tool interaction, whereas
+the ground-truth answer contains trajectory-level informa-
+tion that may obscure turn-level causal contributions. These
+results highlight execution feedback as the most effective
+privileged signal for hindsight-based credit assignment.
+Lookahead Teacher Selection. To evaluate the effect of
+hindsight horizon and teacher combination strategies, we
+compare fixed-lookahead teachers with depths of one, two,
+and three turns, a teacher-fusion variant, and our direction-
+consistent teacher selection strategy. As shown in Figure 4,
+
+Performance (%)
+44.26
+42.37
+38.46
+44.10
+46.99
+LA1
+LA2
+LA3
+Fusion
+Ours
+Solve-P
+
+Performance (%)
+50.24
+49.47
+48.93
+49.96
+50.71
+Solve-R
+
+Performance (%)
+42.35
+42.66
+39.52
+43.03
+43.07
+Solve-F1
+
+Performance (%)
+45.62
+44.83
+42.30
+45.70
+46.92
+Avg.
+Fixed lookahead
+Teacher fusion
+Teacher selection
+Figure 4: Comparison of fixed-lookahead teachers, teacher fusion, and our direction-consistent teacher selection.
+
+Performance (%)
+Solve-P
+Solve-R
+Solve-F1
+Avg.
+41.89
+49.40
+42.40
+44.56
+39.86
+48.81
+40.46
+43.04
+46.99
+50.71
+43.07
+46.92
+First five
+Last five
+All turns
+Figure 5: Effect of temporal self-distillation coverage.
+the one-step teacher performs best among the fixed-horizon
+variants, while longer lookahead depths consistently reduce
+performance, suggesting that excessive future context in-
+troduces irrelevant interactions that dilute turn-specific su-
+pervision. Although teacher fusion provides a slight im-
+provement over the best fixed teacher, it cannot effectively
+resolve conflicting hindsight signals across different hori-
+zons. In contrast, our direction-consistent selection strategy
+achieves the best performance on all metrics, outperforming
+both the strongest fixed teacher and teacher fusion. These re-
+sults demonstrate that multi-horizon hindsight is most effec-
+tive when informative future evidence is selectively retained
+rather than indiscriminately aggregated.
+Temporal Coverage of Hindsight. To evaluate how the tem-
+poral coverage of hindsight supervision affects multi-turn
+TIR, we compare three variants that apply self-distillation to
+the first five turns, last five turns, or all turns of each trajec-
+tory. As shown in Figure 5, supervising the entire trajectory
+consistently achieves the best performance, outperforming
+the first-five-turn and last-five-turn variants by 2.36% and
+3.88% in average performance, respectively. Moreover, su-
+pervising the first five turns consistently outperforms the last
+five, suggesting that early tool-use decisions have a larger
+impact by shaping subsequent interaction states. Neverthe-
+less, the clear advantage of full-trajectory supervision in-
+dicates that reliable credit assignment requires execution-
+conditioned hindsight throughout the entire interaction.
+Hyper-parameter Analysis. To examine the sensitivity of
+TurnSight, we independently vary two key hyper-parameters,
+the mixing coefficient λ and modulation bound ϵw, and eval-
+0.0
+0.2
+0.5
+0.8
+1.0
+46.0
+48.0
+50.0
+52.0
+54.0
+Solve-R
+(a) Impact of Mixing Coefficient 
+Solve-R
+Solve-P
+39.0
+42.0
+45.0
+48.0
+51.0
+Solve-P
+0.1
+0.2
+0.5
+0.8
+0.9
+46.0
+48.0
+50.0
+52.0
+54.0
+Solve-R
+(b) Impact of Modulation Bound 
+Solve-R
+Solve-P
+39.0
+42.0
+45.0
+48.0
+51.0
+Solve-P
+Figure 6: Sensitivity analysis of performance to hyper-
+parameters. (a) shows the impact of mixing coefficient λ.
+(b) illustrates the effect of modulation bound ϵw.
+uate their effects on FTRL. As shown in Figure 6, both ex-
+hibit a consistent unimodal trend, achieving the best per-
+formance at λ = 0.5 and ϵw = 0.5. Increasing λ initially
+improves performance, indicating that turn-level hindsight
+signals complement trajectory-level advantages. However, an
+overly large λ degrades performance, as excessive emphasis
+on local credit may weaken global task-level guidance. This
+highlights the need to balance fine-grained interaction su-
+pervision with overall outcome optimization. Similarly, ϵw
+determines the strength of hindsight modulation. Small val-
+ues restrict the contribution of execution-conditioned signals,
+whereas overly large values may amplify noise in imperfect
+teacher–student gaps. The optimal intermediate setting there-
+fore strikes an effective balance between exploiting hindsight
+information and maintaining stable RL optimization.
+Conclusion
+In this paper, we identify two key requirements for credit as-
+signment in TIR: alignment with on-policy execution states
+and coherence at the interaction level. To address this, we pro-
+pose TurnSight, a turn-level hindsight self-distillation frame-
+work that derives execution-conditioned, multi-horizon hind-
+sight assessments from on-policy tool execution outcomes.
+By leveraging these assessments to modulate RL advantages
+without altering their optimization direction, TurnSight en-
+ables fine-grained and reliable credit assignment while pre-
+serving the exploration capability of RL. Extensive exper-
+iments on both in-domain and out-of-domain benchmarks
+demonstrate the effectiveness, robustness, and generalization
+ability of TurnSight across diverse multi-turn TIR scenarios.

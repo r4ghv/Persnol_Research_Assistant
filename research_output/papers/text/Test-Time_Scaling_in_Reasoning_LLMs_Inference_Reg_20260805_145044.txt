@@ -1,0 +1,611 @@
+Test-Time Scaling in Reasoning LLMs: Inference Regimes,
+Evaluation, and Reproducibility
+Mohsen Hariri
+Weicong Chen
+Nahal Shahini
+Vikash Singh
+Kai Ye
+Amirhossein Samandar
+Debargha Ganguly
+Sreehari Sankar
+Yanyan Zhang
+Shouren Wang
+Jerry Peng
+Biyao Zhang
+Michael Hinczewski
+Vipin Chaudhary
+{mohsen.hariri,weicong,nxs814,vikash,kxy406,axs2935,debargha,sxs2284,yxz3106,sxw992,jxp1146,bxz297,
+mxh605,vipin}@case.edu
+Case Western Reserve University
+Abstract
+Large language models can solve substantially harder reasoning problems when they are
+allowed to spend more compute at inference time. The term test-time scaling, however, now
+refers to a diverse set of inference algorithms, including methods that extend deliberation
+along a single trajectory, sample completed candidates and aggregate them through voting
+or verification, and search over unfinished partial states. These algorithms differ in their
+statistical structure, compute accounting, and failure modes. Treating these procedures as
+interchangeable under a single scalar “budget,” or reporting accuracy without the inference
+protocol that produced it, makes results difficult to compare across studies. We develop a
+systematic account of test-time scaling along three axes. First, we formalize test-time scaling
+as budgeted inference over the implicit prefix tree of an autoregressive model and distin-
+guish three structural regimes: single-trajectory sequential scaling, leaf-level scaling with
+terminal reduction, and prefix-level scaling. Second, we treat the evaluated object as the
+entire inference system and develop evaluation principles that separate end-to-end system
+performance from candidate-bank diagnostics. We introduce an evaluation profile whose
+coordinates and simple functionals recover or bound common repeated-sampling metrics,
+and prescribe protocol-matched reporting of compute and uncertainty. Third, we specify
+reproducibility requirements for inference protocols, distinguishing exact replay from dis-
+tributional reproducibility and identifying the artifacts needed to support each. We also
+organize the open-weight reasoning ecosystem by model-side and interface mechanisms, ap-
+ply these principles to broad-knowledge, symbolic-reasoning, and competition-mathematics
+benchmarks, and assemble over 2 billion full reasoning traces for release with progressively
+richer verifier and token-level signals.1
+ https://mohsenhariri.github.io/scorio/tts
+https://huggingface.co/datasets/harimo/scorio
+
+Introduction
+Large language models (LLMs) often become substantially more capable on difficult reasoning tasks when
+they are allowed to externalize intermediate reasoning steps and consume additional computation at inference
+time. Early work on chain-of-thought prompting and self-consistency showed that arithmetic, symbolic, and
+commonsense reasoning can improve markedly when models generate multi-step solutions and aggregate
+multiple samples (Wei et al., 2022; Wang et al., 2022). More recent systems treat deliberate reasoning as an
+explicit design target rather than a prompting artifact: DeepSeek-R1 uses reinforcement learning to elicit
+long-form reasoning (Guo et al., 2025); Phi-4-reasoning combines curated supervised traces with outcome-
+based reinforcement learning (Abdin et al., 2025); Qwen3 exposes explicit “thinking” modes and reasoning-
+budget controls (Team, 2025); and the gpt-oss release provides open-weight reasoning models trained with
+1For the API list, see Appendix F; for the release data, see Appendix G.
+
+  [cs.LG]  4 Aug 2026
+
+large-scale distillation and reinforcement learning (OpenAI, 2025). As a result, reasoning performance is now
+shaped not only by pretraining and post-training, but also by how computation is allocated at test time.
+Despite this progress, the phrase test-time scaling is used to describe several materially different inference
+algorithms. Some methods allocate extra compute along a single evolving trajectory, for instance, by forcing
+longer deliberation or adaptively intervening on one response (Muennighoff et al., 2025). Others sample
+multiple completed candidates and reduce them using voting, reranking, verifier-based selection, or minimum-
+Bayes-risk decoding (Wang et al., 2022; Cobbe et al., 2021; Freitag et al., 2022). Still others search over
+unfinished partial states, as in Tree-of-Thoughts, RAP, and value-guided decoding (Yao et al., 2023; Hao
+et al., 2023; Yu et al., 2024). These regimes differ in their statistical structure, induced proposal distributions
+over candidates, compute accounting, and failure modes. Treating them as interchangeable under a single
+scalar “budget” obscures the actual procedure being evaluated and makes cross-paper comparisons difficult
+to interpret (Welleck et al., 2024; Snell et al., 2025).
+Evaluation is correspondingly more subtle than benchmarking a base model in isolation. In practice, mea-
+sured performance depends on the full inference protocol: the prompt template, decoder, search controller,
+reducer, verifier or judge, stopping rule, and numerical settings. Best-of-N and verifier-guided reranking
+can improve accuracy, but imperfect proxy scores may themselves be overoptimized as the candidate set
+grows (Gao et al., 2023; Huang et al., 2025; Khalaf et al., 2025). LLM judges provide flexible evaluation of
+open-ended outputs, yet prior work documents biases such as position and verbosity effects, and recent work
+shows that judge quality is highly task- and procedure-dependent in test-time scaling settings (Zheng et al.,
+2023; Zhou et al., 2025). Even when prompts and methods are fixed, benchmark estimates can vary due to
+stochastic decoding and implementation details, motivating interval estimates and explicit reproducibility
+controls (Miller, 2024; Blackwell et al., 2024; Ye et al., 2024; Liu et al., 2025b). A rigorous study of rea-
+soning under test-time scaling thus requires a precise algorithmic vocabulary, evaluation protocols matched
+to deployed inference algorithms, and model comparisons that are explicit about both model-side training
+choices and inference-time controls.
+This need for explicit system-level evaluation is amplified by the pace and heterogeneity of the open-weight
+reasoning ecosystem. Recent releases span reinforcement-learning-first reasoning models (Guo et al., 2025),
+data-centric and verification-focused SFT pipelines (Ye et al., 2025; Guha et al., 2025), open reproductions
+built around released trace corpora and training code (Hugging Face, 2025a; Open-R1 Team, 2025b), and
+hybrid systems that combine reasoning and non-reasoning behavior either within a single checkpoint or in
+parameter space (Team, 2025; Yang et al., 2025). This diversity is scientifically valuable, but it also makes
+comparisons prone to confounding: two checkpoints may differ simultaneously in their supervision signals,
+reasoning styles, compute budgets, and aggregation protocols. The field, therefore, benefits from studies
+that separate these axes and evaluate reasoning as a property of the full inference system rather than of
+model weights alone. Figure 1 summarizes this shift as a selective chronology: inference-time algorithms,
+model-side training, and interface controls have co-evolved toward systems whose performance depends on
+the checkpoint, interface, controller or reducer, evaluator, stopping rule, and budget.
+This paper addresses that gap. We formalize test-time scaling as a family of budgeted inference algorithms
+over the implicit prefix tree of an autoregressive model. Our treatment of sampled inference separates the
+evidence computed for each trace from decisions on a completed pool; causal stopping is modeled sepa-
+rately because it changes generation cost. Shared-bank comparisons can then isolate aggregation, whereas
+end-to-end evaluation measures the complete inference system. Candidate-bank quality is reported through
+structured diagnostics, including a unified family of repeated-sampling metrics for the trade-off between dis-
+covery and stability. We instantiate these ideas on a broad set of contemporary open-weight reasoning models
+and assemble over 2 million reasoning traces to support trace analysis, verifier training, and reproducible
+study across science, reasoning, and competition mathematics.
+Our main contributions are as follows:
+• Formalizing test-time scaling. We present a unified formalization of test-time scaling as budgeted
+inference over the implicit prefix tree and distinguish three structural regimes: single-trajectory
+sequential scaling, leaf-level scaling, and prefix-level scaling.
+
+ELICIT + AGGREGATE
+SEARCH + ALLOCATE
+INTERNALIZE + CONTROL
+
+TEST-TIME
+INFERENCE
+MODEL & INTERFACE
+MECHANISMS
+EVALUATION
+& REPORTING
+EVALUATED
+SYSTEM
+single trajectory
+completed leaves
+unfinished prefixes
+verified SFT / distill
+RL / preference
+control / composition
+CoT prompting
+elicit one chain
+Adaptive deliberation
+continue or stop
+Budget forcing
+Verifier selection
+generate-test-select
+Self-consistency
+vote over leaves
+Best-of-N / MBR
+terminal reduction
+PRM + ToT / RAP
+score partial states
+Value-guided search
+OVM / rollouts
+Budget-aware search
+adaptive frontier
+Trace distillation
+teacher CoTs
+Data-minimal SFT
+LIMO ·
+s1 s1.1
+R1 + distill
+DeepSeek
+Verified-data wave
+Sky-T1·
+OpenThoughts
+Verifiable rewards
+outcome / process
+Native reasoners
+o1·
+QwQ
+Reward-optimized
+Phi-4+ ·
+Qwen3
+Length-aware tuning
+Sky-T1 Flash
+Hybrid modes
+EXAONE·
+Nemotron
+Reasoning controls
+Qwen3 ·
+gpt-oss
+Fusion / merge
+FuseO1·
+TinyR1
+evaluated family
+field context
+Exact verification
+programmatic checks
+Bank diagnostics
+pass@k / consistency
+Judge validity
+bias / calibration
+Compute accounting
+cost / uncertainty
+Reward overopt.
+non-monotone BoN
+this work
+Protocol reporting
+utility / profile / cost / CI
+Checkpoint
+weights
+Prompt + decoder
+proposal
+Controller + reducer
+selection
+Verifier + judge
+proxy
+Budget + stopping
+compute
+Report together
+utility / profile / cost / uncertainty
+Figure 1: A selective chronicle of reasoning systems, from elicited chains to budgeted inference. Test-time in-
+ference expanded from single-trajectory elicitation and leaf-level sampling with terminal reduction to include
+prefix-level search and budget-aware control (Section 2.1), while model and interface mechanisms evolved
+through verified distillation, reward optimization, explicit reasoning controls, and parameter-space compo-
+sition (Appendices D and E). The lower bands summarize the evaluation and reproducibility requirements
+developed in Section 3 and the evaluated object used throughout this paper: checkpoint, prompt, decoder,
+controller or reducer, verifier or judge, budget, and stopping rule, with utility, candidate-bank profile, cost,
+and uncertainty reported together. Green dots mark families represented in the experimental roster; dashed
+boxes denote contextual milestones. Era labels indicate shifts in emphasis rather than mutually exclusive
+periods.
+• Establishing evaluation principles for test-time scaling. We evaluate the entire inference
+system: base model, prompting, decoder, inference-time evidence, search or aggregation rule, stop-
+ping controller, evaluator, and budget. The resulting principles separate shared-bank aggregation
+comparisons from end-to-end performance and post-hoc selection from causal stopping. They also
+require compute reporting on the relevant axes and uncertainty estimates for the actual protocol.
+• Providing a model-centric view of the open reasoning ecosystem. We organize and compare
+representative open-weight reasoning models by model-side and interface mechanisms—including
+verified SFT and distillation, reinforcement learning or preference optimization, inference-time con-
+trol, and parameter-space fusion—so that comparisons are grounded in the mechanisms that most
+directly affect reasoning quality, controllability, and cost.
+• Releasing a large-scale reasoning-trace resource.
+We release a corpus of over 2 million
+reasoning-trace sequences spanning science, reasoning, and competition mathematics, intended as a
+reusable resource for analyzing reasoning behavior, training or calibrating evaluators, and improving
+reproducibility in reasoning-model research.
+
+Formalizing Test-Time Scaling
+Test-time scaling is most naturally viewed as a family of budgeted inference algorithms built atop a fixed
+autoregressive model.
+Recent work studies repeated sampling with terminal reduction, adaptive single-
+
+trajectory deliberation, and search over partial reasoning states as distinct ways of spending additional
+inference-time computation with a fixed base model (Welleck et al., 2024; Snell et al., 2025; Muennighoff
+et al., 2025; Wu et al., 2024). The common object behind these methods is the implicit prefix tree induced
+by generation: extra compute may be spent along a single trajectory, across multiple completed leaves, or
+over internal prefixes before completion. We formalize that view and use it to distinguish three structural
+regimes.
+2.1
+Problem setup and three-regime taxonomy
+Let x ∈X be an input prompt and let pθ(· | x) be an autoregressive language model. The finite prefixes
+reachable from x define an implicit rooted tree T (x); we write z ⪯y when prefix z lies on the path to
+completed generation y, and L(x) for the set of terminal leaves (Welleck et al., 2024). A local generation
+policy π (for example, greedy decoding, temperature sampling, or nucleus sampling) induces a proposal
+distribution qπ(y | x) over completed leaves, which may differ from the raw model distribution because
+decoding can truncate, renormalize, or otherwise transform token probabilities.
+A completed generation y may contain both intermediate reasoning and a task answer. We write Parse(y) =
+(r, a), where r is the reasoning trace and a is the extracted answer. When only part of the output can
+be checked programmatically, we further write Ψ(y) = (d, s), where d is the deterministically verifiable
+component and s is the remainder. Depending on the task, d may be the final answer string, an executable
+program, an action sequence, or any other artifact that admits task-specific checking.
+Our object of interest is a family of budgeted inference algorithms {AB}B∈B. Algorithm AB may adaptively
+interleave primitive operations ot such as token generation, prefix expansion, verifier calls, judge calls, or
+terminal reduction, subject to a cumulative cost constraint P
+t c(ot) ≤B. It returns either a completed
+leaf ˆyB(x) ∈L(x) or an extracted answer ˆaB(x). Let Ux(y) denote the task utility of a completed leaf. In
+reasoning benchmarks Ux(y) is often exact correctness, but the same abstraction also covers graded utilities
+such as execution score or preference reward.
+In practice, Ux is usually observed only through evaluation signals. A programmatic verifier VP (x, d) ∈V
+may return a Boolean decision, a scalar score, a diagnostic object, or a canonicalized answer representation. A
+learned evaluator Jϕ(x, ω) scores either a completed leaf ω = y or a partial state ω = z. Unlike programmatic
+checks, learned evaluators are proxies whose usefulness depends on their supervision and on the protocol
+used at test time (Cobbe et al., 2021; Lightman et al., 2023; Zheng et al., 2023; Zhou et al., 2025).
+For a task distribution P, the associated test-time scaling curve is
+G(B) = Ex∼P, ξ
+Ux(ˆyB(x; ξ))
+where ξ denotes the algorithm’s internal randomness, or the corresponding answer-level utility when the
+method outputs ˆaB(x). The term scaling refers to how performance varies with budget; it does not imply
+that performance must be monotone for every method.
+We use the following operational taxonomy, illustrated in Figure 2.
+Single-trajectory sequential scaling.
+At every step, there is at most one unfinished active prefix. Ad-
+ditional computation changes how that prefix is extended, revised, or terminated, but never branches into a
+competing frontier.
+Leaf-level scaling.
+Additional compute produces a bank of completed candidates. Any interaction be-
+tween candidate trajectories is deferred until after the candidates have completed, via a terminal reducer.
+Prefix-level scaling.
+Additional compute is allocated based on scores for unfinished prefixes. Expansion,
+pruning, rollout allocation, or termination decisions depend on partial states before completion.
+These regimes are not mutually exclusive at the system level: many practical methods are hybrids, most
+commonly prefix search followed by a leaf-level reducer.
+
+Single-trajectory
+sequential scaling
+adaptive control
+on one path
+Leaf-level scaling
+N complete leaves
+Prefix-level scaling
+search over prefixes
+before completion
+Figure 2: Three regimes of test-time scaling over the implicit prefix tree. Left: single-trajectory sequential
+scaling allocates compute to one evolving response without maintaining a competing frontier.
+Middle:
+leaf-level scaling allocates compute to multiple completed root-to-leaf trajectories and then reduces them
+to a single output. Right: prefix-level scaling spends compute on internal prefixes, expanding promising
+continuations and pruning others before committing to a completed leaf.
+2.2
+Single-trajectory sequential scaling
+A single-trajectory method maintains one active state zt and remaining budget bt. At step t, a controller
+chooses a meta-action
+νt ∼πseq(· | x, zt, bt),
+then extends only the active path,
+zt+1 ∼Extend(zt; νt, pθ),
+bt+1 = bt −c(νt).
+Typical actions include continuing generation, suppressing eos, appending a control string or critique, chang-
+ing decoding hyperparameters, or stopping. Budget-forcing methods such as s1 are direct instances of this
+template, and more general inference-time meta-generation procedures also fit it when they keep a single
+evolving response rather than a branching frontier (Muennighoff et al., 2025; Welleck et al., 2024).
+The structural advantage of this regime is low orchestration overhead: all extra compute is devoted to a
+single evolving candidate. Its structural limitation is that, because no competing unfinished prefix exists,
+recovery from an early misconception requires explicit self-revision along the same path rather than searching
+for alternatives.
+2.3
+Leaf-level scaling: sampling and reduction
+In leaf-level scaling, additional compute produces complete leaves and a terminal reducer chooses the output.
+In the canonical case,
+YN(x) = {Yi}N
+i=1,
+i.i.d.
+∼qπ(· | x),
+where qπ is a common proposal distribution induced by the base model and decoding policy. Appendix B
+extends this template to weighted and heterogeneous-proposal banks. For each candidate, let mi contain
+metadata available at inference time, and define
+(ri, ai) = Parse(Yi),
+(di, si) = Ψ(Yi),
+vi = VP (x, di),
+ji = Jϕ(x, Yi).
+Given the proposal, the terminal stage is specified by a reducer
+RN :
+ x, {(Yi, mi, vi, ji)}N
+i=1
+7→ˆy or ˆa.
+
+The fixed-bank leaf template separates generation from reduction.
+Under this template, one unfinished
+candidate cannot depend on scores assigned to other unfinished candidates; cross-candidate interaction
+begins inside RN after all N leaves are complete. Adaptive stopping can be added without changing this
+separation. A controller may use completed leaves to decide whether to launch another independent rollout,
+or it may truncate a rollout using that rollout’s prefix-local evidence, but it does not reallocate compute
+among competing unfinished prefixes (Section 3.3). Such controllers change the realized sample count or
+trace length and are not fixed-bank reducers.
+2.3.1
+Canonical reduction rules
+Verifier-constrained selection.
+Let Ipass = {i : VP (x, di) ∈PASS}.
+A verifier-constrained reducer
+selects
+i⋆∈arg max
+i∈Ipass T(x, Yi, vi, ji),
+where T is a tie-breaking score over the passing candidates (for example, the learned score ji or sequence
+likelihood), with a fallback rule if Ipass is empty. This is the generate-test-select pattern used in program-
+synthesis and verifier-based reasoning systems (Li et al., 2022; Cobbe et al., 2021).
+Answer marginalization and self-consistency.
+When answers or verifier outputs can be canonicalized,
+define the empirical answer distribution
+ˆqN(a | x) = 1
+i=1
+1[ai = a].
+Self-consistency selects
+ˆa ∈arg max
+ˆqN(a | x).
+Appendix B shows that this is exactly empirical MBR with agreement utility u(a, a′) = 1[a = a′] (Wang
+et al., 2022; Kumar & Byrne, 2004; Bertsch et al., 2023).
+Learned reranking (Best-of-N).
+When programmatic verification is unavailable or incomplete, a stan-
+dard reducer chooses
+i⋆∈arg max
+i∈[N] ji.
+This covers learned verifiers, reward models, and LLM judges used as inference-time rerankers (Cobbe et al.,
+2021; Snell et al., 2025; Huang et al., 2025).
+Empirical expected-utility selection.
+More generally, with a projection ψ and utility u, one may select
+i⋆∈arg max
+i∈[N]
+
+k=1
+u(ψ(Yi), ψ(Yk)) .
+This MBR template unifies majority vote, semantic-consensus rules, and neural-metric reranking under a
+common expected-utility objective (Kumar & Byrne, 2004; Freitag et al., 2022; Bertsch et al., 2023).
+These rules cover the main structural forms of leaf-level reduction. Additional variants—including weighted
+aggregation, semantic kernels, pairwise aggregation, regularized selection, and the separation of answer
+selection from rationale presentation—are detailed in Appendix B.
+2.3.2
+Failure modes and budget allocation
+The main advantage of leaf-level scaling is that increasing compute increases candidate coverage without
+risking early pruning. Its failure modes come from the reducer. An incomplete verifier can admit false posi-
+tives as N grows, while misspecified learned scores can be overoptimized by hard argmax selection, producing
+the non-monotone Best-of-N behavior documented in recent work on reward-model overoptimization and
+
+inference-time reward hacking (Gao et al., 2023; Huang et al., 2025; Khalaf et al., 2025). Judge-based reduc-
+ers also inherit protocol sensitivities such as position bias and verbosity bias, so judge design and prompting
+are part of the method under evaluation (Zheng et al., 2023; Zhou et al., 2025). Finally, leaf count and
+evaluator count are distinct budgets: MBR-style reducers may require O(N2) utility calls, motivating ap-
+proximate implementations such as confidence-based pruning and faster MBR approximations (Cheng &
+Vlachos, 2023; Jinnai & Ariu, 2024).
+A fixed sample count is therefore only one leaf-level design choice. One may instead choose N = N(x) by
+solving
+N(x) ∈arg
+max
+n: Cgen(n)+Ceval(n)≤B E
+Ux(ˆyn(x))
+where Cgen denotes generation cost and Ceval covers inference-time scoring, control, and reduction. Recent
+inference-scaling studies explicitly optimize this budget allocation and show that difficulty-adaptive compute
+can dominate fixed-N baselines (Wu et al., 2024; Snell et al., 2025).
+2.4
+Prefix-level scaling: search over partial states
+Prefix-level scaling allocates compute before trajectories are complete. To cover both token-level search and
+step-level methods such as Tree-of-Thoughts, RAP, and AlphaZero-like decoding, let z denote a search state
+representing either a literal token prefix or a macro-prefix composed of one or more reasoning steps, and
+write Succ(z) for its allowed expansions (Yao et al., 2023; Hao et al., 2023; Wan et al., 2024b).
+2.4.1
+Frontier, terminal bank, and budget
+A prefix-level method maintains an active frontier Ft, a bank of completed leaves Yt, and remaining budget
+bt. A generic iteration is
+zt ∈Select(Ft) →Ct ⊆Succ(zt) →score Ct →(Ft+1, Yt+1, bt+1).
+The budget may count generated tokens, node expansions, rollout calls, verifier or judge calls, or wall-clock
+cost. Unlike in leaf-level scaling, future compute allocation depends explicitly on evaluations of unfinished
+states.
+2.4.2
+Prefix evaluation as continuation-value estimation
+When a search commits to a single prefix and returns one completion drawn from it, the Bayes-optimal
+prefix score is the continuation value
+ρ(z) = EY ∼qρ(·|x,z)
+Ux(Y )
+where qρ(· | x, z) denotes the distribution over completed leaves obtained by continuing from prefix z with
+rollout policy ρ. If search instead accumulates a bank that is later passed to a reducer R, the exact marginal
+value of expanding z becomes history-dependent because it depends on how future leaves from z will interact
+with the leaves already collected. Most practical methods ignore this coupling and use one-leaf surrogates
+such as correctness probability, process reward, or rollout return.
+2.4.3
+Canonical prefix evaluators
+Likelihood-based scoring.
+A canonical heuristic is the cumulative, optionally length-normalized, log-
+probability under the local generation policy,
+SLL(z) =
+|z|
+j=1
+log π(zj | x, z<j).
+With π = pθ this is the standard beam-search score. It ranks prefixes by proposal probability rather than
+by downstream utility.
+
+Outcome-supervised value models.
+Outcome-supervised value models approximate the probability
+that a prefix reaches a correct completion and use that estimate for pruning, either directly or in combination
+with likelihood:
+bQ(z) ≈
+Y ∼qρ(·|x,z)
+ Ux(Y ) = 1
+S(z) = bQ(z) or S(z) = αSLL(z) + β bQ(z).
+Such value-guided decoding is explored for mathematical reasoning in OVM-style systems (Yu et al., 2024).
+Process reward models (PRM).
+When supervision is available on intermediate reasoning steps, a
+process reward model can score a partial path directly. If z = (s1, . . . , st) is a sequence of steps, one may use
+SPRM(z) =
+k=1
+Rϕ(x, s≤k)
+SPRM(z) = Rϕ(x, z),
+where Rϕ scores each step in the context of the problem and the preceding steps and is learned from step-level
+supervision (Lightman et al., 2023).
+Rollout-based evaluation.
+When learned value estimates are unreliable, continuation value can be esti-
+mated by Monte Carlo completion:
+bQMC(z) =
+
+Mroll
+Mroll
+m=1
+Y (m)
+Y (m) ∼qρ(· | x, z).
+MCTS-style reasoning methods can be interpreted as structured rollout allocation together with backup of
+these estimates (Hao et al., 2023; Wan et al., 2024b).
+Sound partial checks.
+A partial check H(x, z) ∈{0, 1} is sound for rejection if
+H(x, z) = 0 =⇒Ux(y) = 0
+for all y ⪰z.
+Only sound prefix tests justify safe pruning. Learned value or reward models generally do not provide this
+guarantee.
+2.4.4
+Score-induced search procedures
+Beam search.
+Beam search keeps a frontier of size K and updates it by
+Ft+1 = TopK
+ [
+z∈Ft
+Succ(z) ; S(·)
+Standard beam search uses S = SLL, while verifier-guided and value-guided variants replace or augment
+likelihood with learned prefix scores (Yu et al., 2024; Lightman et al., 2023).
+Best-first search.
+Best-first search repeatedly expands the highest-scoring active prefix,
+z⋆∈arg max
+z∈Ft S(z),
+Ft+1 = (Ft \ {z⋆}) ∪Succ(z⋆).
+In classical search, admissible heuristics can yield optimality guarantees; in LLM reasoning, learned prefix
+scores are generally heuristic rather than admissible (Koh et al., 2025).
+MCTS-style search.
+Monte Carlo tree search alternates selection, expansion, evaluation, and backup. A
+standard UCT rule selects
+at ∈arg max
+ 
+Q(z, a) + cuct
+log n(z)
+n(z, a)
+
+where n(z) and n(z, a) are visit counts and unvisited actions are selected first. Policy-prior variants such
+as PUCT replace the pure UCT bonus with one modulated by an action prior. In LLM reasoning, RAP,
+AlphaZero-like search, and related methods instantiate this template with rollout-based or learned value
+estimates (Kocsis & Szepesvári, 2006; Browne et al., 2012; Hao et al., 2023; Wan et al., 2024b). Tree-of-
+Thoughts can be viewed as a related search controller operating over thought-level rather than token-level
+expansions (Yao et al., 2023).
+Additional controller variants, including learned search policies and reward-guided objectives, are discussed
+in Appendix C.
+2.4.5
+Scaling behavior and comparison to leaf-level methods
+Prefix-level search can be markedly more computationally efficient when prefix scores concentrate budget
+on high-value branches. Its additional difficulty is that pruning decisions driven by prefix scores change
+the support of reachable completions. If every ancestor of a correct leaf is pruned, no later computation
+can recover that leaf. Consequently, the relevant statistical property is often not global calibration but the
+within-instance ordering induced over competing frontier states.
+Under a fixed budget B, prefix search also induces its own effective proposal distribution over completed
+leaves,
+qsearch,B(y | x) = Pr
+ ˆyB(x) = y
+which depends jointly on the scorer, controller, and stopping rule; when the search returns a bank rather than
+a single leaf, the corresponding object is the per-leaf inclusion probability of the returned bank. Candidate
+banks returned by prefix search are therefore not i.i.d. draws from qπ(· | x), so direct comparisons to leaf-level
+Best-of-N must normalize both generation cost and evaluator cost.
+Finally, prefix search creates large branching structures with shared prefixes. Efficient tree-structured infer-
+ence kernels exploit this sharing through key-value cache reuse, which can materially change the practical
+compute frontier; DEFT is a representative example (Yao et al., 2025). Many real systems are therefore
+hybrid: prefix search first constructs a search-induced bank of completed leaves, and a leaf-level reducer then
+selects the final output. The repeated-sampling metrics used later to summarize such candidate banks are
+introduced in Section 3.4.
+
+Evaluating Test-Time Scaling
+Under test-time scaling, reported performance depends on the full inference protocol defined over the prefix
+tree in Section 2.1.
+The protocol determines both the candidate distribution and the final output rule.
+Its specification includes budget allocation, decoding or search, inference-time evidence, aggregation and
+stopping rules, and any verifier or judge calls. Evaluation should therefore state the benchmark structure,
+the induced proposal distribution, the aggregation and stopping protocol, the reported estimand, and the
+uncertainty procedure.
+3.1
+Benchmark design as evaluation structure
+Benchmark design determines which capability is measured and whether additional inference-time compute
+can meaningfully change outcomes. Under test-time scaling, benchmark suites should therefore be organized
+by evaluation structure, not only by task domain or historical popularity.
+A primary distinction is between verifiable and open-ended tasks. In verifiable settings such as mathematics
+and code generation, correctness can be checked exactly or by execution, so repeated sampling and ter-
+minal reduction target a comparatively sharp correctness criterion (Chen et al., 2021; Li et al., 2022). In
+open-ended settings, evaluation relies on rubrics, pairwise preferences, or judge models; consequently, the
+evaluation protocol itself—including prompts, comparison order, side randomization, and aggregation—is
+part of the method being evaluated (Liang et al., 2023; Zheng et al., 2023; Chiang et al., 2024). In so-
+cially consequential tasks, the evaluation target extends beyond task utility to fairness, with data-level,
+training-time, and post-processing mitigation strategies evaluated using both predictive-performance and
+
+group-fairness metrics (Kiashemshaki et al., 2025). These regimes interact differently with additional com-
+pute: verifier-based selection, agreement-based aggregation, and judge-based re-ranking need not improve
+at the same rate as budget increases (Cobbe et al., 2021; Lightman et al., 2023; Zheng et al., 2023).
+Because open-weight reasoning checkpoints differ materially in verified supervision, preference objectives,
+and built-in reasoning-budget controls, Section D.2 summarizes these system-level levers separately.
+The benchmark structure should also match the task’s interaction model. Single-turn exact-answer tasks
+probe discovery of a correct terminal leaf, whereas interactive agent benchmarks evaluate full trajectories,
+including recovery from intermediate errors (Yao et al., 2024; Welleck et al., 2024). For interactive chatbot
+tasks involving sensitive disclosures, ecological validity also requires modeling users’ contextual privacy deci-
+sions and the protective actions exposed by the interface (Nezhad et al., 2026). The same inference algorithm
+can therefore appear strong under “any correct sample” reporting yet weak under trajectory-level reliability
+metrics (Section 3.4).
+Freshness and difficulty calibration matter especially under test-time scaling.
+Benchmark-label integrity
+is also essential, as vision-language-model-based sanitation of noisy and semantically inconsistent labels in
+manufacturing datasets can materially affect downstream classification accuracy (Mahjourian & Nguyen,
+2026). Contamination-limited benchmarks and time-segmented datasets help distinguish genuine search or
+verification gains from memorization (White et al., 2025; Jain et al., 2025; Oren et al., 2024). Benchmarks
+should also avoid saturation: if tasks are too easy, additional compute has little effect; if they are uniformly
+difficult, scaling curves flatten because correct solutions are rarely reachable. Since many reasoning bench-
+marks are small, dataset size directly limits the statistical resolution of scaling comparisons (Snell et al.,
+2025; Miller, 2024; Ye et al., 2024) (see Section 3.5).
+3.2
+Decoding protocols and induced proposal distributions
+Under test-time scaling, the object sampled by the inference system is not the raw model distribution pθ alone,
+but the proposal distribution induced by a complete decoding protocol. Let Σ denote the token vocabulary.
+At a partial generation ht = (x, y<t), the model produces logits ℓt ∈R|Σ| and token probabilities
+pt(i) =
+exp ℓt(i)
+j∈Σ exp ℓt(j),
+i ∈Σ.
+A one-token decoder with configuration λ and finite state σt returns
+(eqt, atok
+, σt+1) = Dλ(ht, ℓt, pt, χt, σt),
+where χt denotes side information available to the decoder, such as hidden states, token embeddings, auxiliary
+scores, rollout estimates, or controller state. If atok
+= ⊥, the next token is set deterministically to yt = atok
+otherwise yt ∼Cat(eqt).
+A broad class of stochastic decoders admits an energy–gate form (Figure 3). For a nonnegative token measure
+ut : Σ →R≥0 and nonempty support St ⊆Σ,
+eqt(i) = NormSt(ut)i = ut(i)1{i ∈St}
+j∈St ut(j) .
+(1)
+The measure ut determines relative weights, while the support St determines which tokens remain eligible.
+Ordinary temperature sampling uses ut(i) = exp(ℓt(i)/T) and St = Σ; ordinary truncation rules restrict
+St and renormalize the same measure; uniform or coverage-based samplers change the weights inside the
+retained set. Thus support equivalence and distribution equivalence are distinct: two decoders can retain
+the same candidate set while inducing different token probabilities.
+Composing the local kernels until termination gives the leaf-level proposal distribution used in Section 2.3:
+qλ(y | x) =
+τ(y)
+t=1
+Kλ,t(yt | x, y<t, σt),
+(2)

@@ -1,0 +1,1139 @@
+ParVL: Parallel Scaling and Expandable
+Compute Allocation for Multimodal LLMs
+Yang Yang1,2,∗, Qinyu Zhao1, Mouxiang Chen3, Xiaohui Li4,
+Lixin Gu2, Wenhai Wang5, Hongjie Zhang2, Wenwei Zhang2
+1The Australian National University
+2Shanghai AI Laboratory
+3Zhejiang University
+4Shanghai Jiao Tong University
+5Nanjing University
+Abstract
+Existing scaling strategies for Multimodal Large Language
+Models (MLLMs) typically expand either model parame-
+ters or sequential inference computation, incurring substantial
+memory or latency overhead. More importantly, most existing
+methods fail to alter the rigid, fixed computation allocation be-
+tween the Vision Transformer and the Large Language Model
+components, limiting task-specific optimization. To address
+this, we introduce the Parallel Vision-Language (ParVL) scal-
+ing framework for MLLMs, which scales parallel computation
+by reusing the existing ViT and LLM backbone parameters
+across multiple vision and language branches. This framework
+raises a central question: given a fixed backbone parameter
+budget, how should additional shared-backbone computation
+be allocated between the vision and language modalities? We
+instantiate each parallel computational stream with branch-
+specific prefix parameters over a shared backbone, and train
+the entire model end-to-end via full-parameter supervised
+fine-tuning on roughly 13B tokens. We systematically study
+the computation-allocation trade-off between the ViT encoder
+and LLM decoder. ParVL improves overall multimodal per-
+formance over same-recipe single-branch baselines, and the
+best evaluated vision–language allocation varies across tasks.
+Code is available at https://github.com/YangYangGirl/ParVL.
+Introduction
+Large-model capability is commonly scaled by increasing ei-
+ther parameter count or computation. Increasing parameters
+raises storage and memory costs, while many computation-
+scaling approaches, including Chain-of-Thought (CoT) rea-
+soning (Wei et al. 2022) and iterative refinement (Madaan
+et al. 2023), add sequential inference steps and therefore
+increase response latency. Parameter reuse provides a com-
+plementary direction: shared parameters can be applied re-
+currently or across parallel streams to increase computa-
+tion while keeping the backbone parameter count fixed.
+Recent examples include LoopLM (Zhu et al. 2025b),
+ParScale (Chen et al. 2025), and Mixture-of-Recursions
+(MoR) (Bae et al. 2025b). These developments motivate
+parameter-efficient computation scaling under a fixed back-
+bone parameter budget.
+However, extending parameter-reuse scaling to MLLMs
+introduces an additional allocation problem: extra computa-
+tion can be assigned to either the ViT encoder or the LLM
+∗Corresponding author: yang.yang3@anu.edu.au
+ViT
+LLM
+Fixed Compute Allocation
+Expandable Compute
+ViT
+LLM
+ViT
+ViT
+LLM
+Parameter
+Re-use
+Parameter
+Re-use
+Existing Multimodal Models
+Proposed ParVL Framework
+Figure 1: Fixed vs. expandable compute allocation in
+MLLMs. (Left) Existing multimodal models suffer from
+a fixed compute allocation between ViT (vision) and LLM
+(language) components during the SFT phase, which is vi-
+sualized as a locked seesaw. (Right) Our ParVL frame-
+work enables expandable and flexible compute for the two
+modules. By leveraging extensive parameter reuse, our par-
+allel architecture independently scales computation in the vi-
+sion and language modules during SFT, enabling controlled
+comparison of different vision–language allocations across
+branch-count configurations.
+decoder. High-resolution document understanding and fine-
+grained grounding can place greater demands on visual pro-
+cessing, whereas long-form reasoning can stress the decoder;
+many tasks require both, but not in the same proportion.
+Most conventional MLLMs determine this balance at de-
+sign time rather than expose vision and language computa-
+tion as independently controllable scaling axes, as illustrated
+in Figure 1 (left). This raises an MLLM-specific question:
+given a fixed backbone parameter budget, how can computa-
+tion be expanded through parameter reuse while controlling
+its allocation between vision and language? Our experiments
+show that the preferred ViT/LLM allocation varies across
+benchmarks with different visual and reasoning demands.
+In this work, we introduce Parallel Vision-Language
+(ParVL) scaling, a parameter-sharing framework that for-
+mulates parallel scaling in MLLMs as a two-dimensional
+vision-language compute-allocation problem. Because these
+streams can execute concurrently, additional computation
+need not translate into proportional wall-clock latency
+growth when hardware resources permit. To the best of
+our knowledge, ParVL is the first study to jointly scale
+  [cs.CV]  4 Aug 2026
+
+the ViT encoder and LLM decoder through parallel pa-
+rameter reuse. ParVL constructs separate prefix-conditioned
+branches for the two components, aggregates their represen-
+tations at modality-specific stages, and controls their branch
+counts independently. This design enables expanded compu-
+tation to be allocated flexibly between vision and language
+with modest parameter growth.
+Under the same full-parameter SFT recipe, the best evalu-
+ated ParVL configuration improves the 9-benchmark average
+from 49.6 to 50.5 at 1B. At the 2B and 8B scales, the balanced
+branch-count configuration (Pv = 2, Pl = 2) yields average
+scores of 54.7 and 63.0, compared with 54.4 and 62.5 for the
+corresponding single-branch baselines.
+Our contributions are threefold. (1) We introduce ParVL, a
+parallel-scaling framework for MLLMs that formulates com-
+putation expansion as a two-dimensional vision–language al-
+location problem and implements it with parameter-shared,
+prefix-conditioned ViT and LLM branches and modality-
+specific token-wise aggregation. (2) Through a systematic
+study of nine vision–language branch-count configurations,
+we show that the preferred compute allocation varies across
+benchmarks. (3) Controlled comparisons at 1B, 2B, and 8B
+scales, together with latency and memory profiling, charac-
+terize the accuracy–cost trade-offs of parallel scaling.
+Related Work
+Scaling Laws for Language Models.
+Scaling laws charac-
+terize predictable relationships between model performance
+and parameter count, training-data size, and training com-
+pute (Kaplan et al. 2020; Hoffmann et al. 2022). Dense pa-
+rameter scaling increases capacity but also raises storage
+and memory costs. Sparse MoE models instead expand total
+capacity while activating only a subset of experts for each to-
+ken (Jacobs et al. 1991; Shazeer et al. 2017; Fedus, Zoph, and
+Shazeer 2022; Du et al. 2022; Tian et al. 2025). Computation
+scaling instead allocates additional computation without nec-
+essarily enlarging the parameter set. A complementary scal-
+ing direction is to reuse model parameters across recurrent
+or parallel computation paths. Recent recursive and recurrent
+examples include LoopLM (Zhu et al. 2025b), Mixture-of-
+Recursions (MoR) (Bae et al. 2025b), and Relaxed Recursive
+Transformers (Bae et al. 2025a). LoopLM performs iterative
+latent computation by repeatedly applying a shared model,
+MoR reuses a shared layer stack across dynamically assigned
+recursion depths, and Relaxed Recursive Transformers pair
+shared base layers with layer-wise LoRA adapters. These
+methods scale effective depth through sequential parameter
+reuse. ParScale explores a parallel alternative by reusing a
+shared model across multiple concurrent streams and aggre-
+gating their outputs (Chen et al. 2025).
+Sparse-capacity scaling has also been adopted in MLLMs.
+MoE-LLaVA replaces selected LLM feed-forward layers
+with sparse expert layers, whereas CuMo places sparsely
+gated MoE blocks in both the vision encoder and MLP con-
+nector (Lin et al. 2026; Li et al. 2024). These methods add and
+route expert parameters rather than reusing a shared dense
+backbone across repeated computation. In contrast, shared-
+backbone parameter reuse in MLLMs remains largely unex-
+plored. The extension is non-trivial as it introduces a critical
+new scientific question that does not exist in the text-only
+domain: given a fixed parameter budget, how can one effec-
+tively expand the model’s computational capacity via param-
+eter reuse, and concurrently determine how computational
+resources should be allocated between the vision (ViT) and
+language (LLM) modalities? In this work, we are the first to
+systematically investigate this vision-language computation
+allocation trade-off. We adapt a parallel architecture inspired
+by ParScale merely as a vehicle for this study, proposing our
+ParVL framework to flexibly control and evaluate this novel
+resource allocation problem.
+Inference-Time
+Scaling.
+The
+success
+reasoning-
+oriented language models, exemplified by DeepSeek-
+R1 (Guo et al. 2025), has intensified interest in inference-time
+scaling, which allocates additional computation during infer-
+ence to improve model performance. Serial inference-time
+scaling commonly allocates additional computation through
+longer Chain-of-Thought reasoning traces (Wei et al. 2022),
+thereby extending the serial inference path and typically in-
+creasing latency. Instead, parallel scaling expands the infer-
+ence computation across multiple candidate paths. The beam
+search maintains multiple partial hypotheses during decod-
+ing (Wiseman and Rush 2016), whereas Self-Consistency
+samples diverse Chain-of-Thought trajectories and aggre-
+gates their final answers (Wang et al. 2022). Where hardware
+resources permit, candidate paths can be evaluated concur-
+rently, so increasing inference computation does not need to
+translate linearly into wall-clock latency.
+However, concurrency does not eliminate redundancy
+across independently generated paths, motivating meth-
+ods that coordinate parallel reasoning or prune redundant
+trajectories. Adaptive parallel reasoning learns to invoke
+spawn() and join() operations to coordinate serial and
+parallel reasoning threads (Pan et al. 2025). ThreadWeaver
+trains language models to organize reasoning into adaptive
+threads and executes them through a trie-based design com-
+patible with autoregressive inference engines (Lian et al.
+2025). DeepPrune detects equivalent partial reasoning tra-
+jectories and prunes redundant paths before completion (Tu
+et al. 2026). These methods improve the efficiency of output-
+space parallel scaling by structuring or pruning concurrent
+reasoning paths. ParVL applies parallel scaling to internal
+computation streams within an MLLM rather than to output
+trajectories. The challenge is not simply to generate more
+language candidates, but to determine how shared-backbone
+parallel computation should be divided between vision and
+language to balance performance, latency, and memory.
+Method
+Architecture Overview.
+ParVL scales vision and language
+computation with Pv ViT branches and Pl LLM branches
+(Figure 2) in parallel. We denote a branch-count configura-
+tion by Pv:Pl, listing the number of ViT branches first and
+the number of LLM branches second. Branches within each
+component share all backbone weights and are differentiated
+only by branch-specific key and value prefixes introduced
+at each prefix-conditioned attention layer. Adding a branch
+therefore increases computation with modest parameter over-
+
+Prefix KV
+Original KV
+Attention
+Matrix
+Attention
+Matrix
+Aggregation
+Aggregation
+Vision-Language Connector
+Text Tokenizer
+Standard Attention
+Prefix-Conditioned Attention
+Original KV
+Chat Message
+… × 𝑃!
+FFN
+Prefix-Conditioned Attention
+Visual Encoder
+… × 𝑃"
+FFN
+Prefix-Conditioned Attention
+LLM
+Parallel Scaling
+Parallel Scaling
+Images
+FFN
+Prefix-Conditioned Attention
+LLM
+FFN
+Prefix-Conditioned Attention
+LLM
+FFN
+Prefix-Conditioned Attention
+Visual Encoder
+FFN
+Prefix-Conditioned Attention
+Visual Encoder
+Figure 2: Overall architecture. ParVL scales multimodal computation with Pv parameter-shared ViT branches and Pl parameter-
+shared LLM branches in parallel. Learnable KV prefixes differentiate branches within each shared backbone. A token-wise
+MLP aggregator fuses vision states before the connector, whose projected tokens are replicated as common input to all
+language branches. A separate token-wise MLP aggregator fuses language states before the shared language-modeling head. All
+components are jointly optimized by full-parameter SFT.
+head. Vision outputs are aggregated and projected into the
+LLM embedding space, replicated across language branches,
+and fused again before the shared language-modeling head.
+Prefix-Conditioned Attention.
+For clarity, we describe a
+single self-attention head and omit the layer index. Given
+a hidden sequence X ∈RL×d, standard attention com-
+putes Q = XWQ, K = XWK, and V = XWV , where
+Q, K, V ∈RL×dh. Branch k maintains learnable prefixes
+K(k)
+P , V (k)
+∈RLp×dh while sharing WQ, WK, WV with all
+other branches. We prepend the prefixes along the sequence
+dimension,
+˜K(k) = [K(k)
+P ; K],
+˜V (k) = [V (k)
+; V ],
+O(k) = softmax
+ 
+Q(k) ˜K(k)⊤
+√dh
++ M
+˜V (k),
+(1)
+where M ∈RL×(Lp+L) is an all-zero mask for bidirectional
+ViT attention and a causal mask for the LLM. Prefixes are
+prepended only to the key and value sequences; the query
+sequence remains unprefixed. During autoregressive decod-
+ing, the learned prefix keys and values are pre-seeded in each
+branch’s KV cache.
+Prefixes are instantiated in every self-attention layer and
+are the only branch-specific backbone parameters. Attention
+still returns states for the original L positions; prefix positions
+serve only as learned context. Their parameter cost grows
+with prefix length and branch count, but remains small rela-
+tive to duplicating a ViT or LLM backbone. During language-
+side decoding, caching each branch’s learned prefix makes its
+specialization available from the first decoding step without
+modifying the shared projection matrices.
+Vision and Language Branch Aggregation.
+Let Zm,k ∈
+RLm×Dm denote the hidden states from branch k of modal-
+ity m ∈{v, ℓ}, where Pm is the corresponding branch
+count and zm,k,t ∈RDm is the feature at token posi-
+tion t. For each token, we concatenate the branch fea-
+tures as cm,t = Concat(zm,1,t, . . . , zm,Pm,t) ∈RPmDm.
+A modality-specific two-layer SiLU MLP gm : RPmDm →
+RPm then predicts the branch logits:
+am,t = softmax(gm(cm,t)) ,
+¯am,t,k = (1 −λm)am,t,k + λm
+zm,t =
+k=1
+¯am,t,kzm,k,t.
+(2)
+The softmax operates over branches, and the aggregated
+sequence is Zm = (zm,t)Lm
+t=1. The smoothing coefficient
+λm ∈[0, 1] interpolates the predicted weights with a uni-
+form distribution, discouraging premature concentration on
+only a few branches when λm > 0. All main experiments
+use MLP aggregation, with λv = 0 and λℓ= 0.1. The sup-
+plement provides a comparison with mean aggregation.
+For vision, Zv,k comes from prefix-conditioned InternViT
+
+branches. After aggregation, we remove the class token:
+Zpatch
+= RemoveCLS(Zv) ∈R(Lv−1)×Dv.
+(3)
+We then reshape the patch sequence into its spatial grid
+and apply the InternVL pixel-shuffle operation:
+bZv = Πr(Zpatch
+) ∈RN×Dc,
+(4)
+where r is the pixel-shuffle ratio, N is the resulting number
+of visual tokens, and Dc is their channel dimension. The
+InternVL connector maps these tokens to the LLM hidden
+space:
+Hv = W2 GELU
+W1 LN( bZv)
+(5)
+Here, the connector maps the aggregated visual tokens to
+Hv ∈RN×Dℓ. Each language branch receives the same
+Hv and text embeddings, processes them with the shared
+LLM backbone under a branch-specific prefix, and produces
+a hidden-state sequence. Equation 2 fuses these language
+states before the shared language-modeling head produces
+next-token logits.
+Training and Compute Allocation.
+We jointly train the
+shared backbones, branch prefixes, aggregation modules, and
+connector using a weighted next-token prediction loss over
+valid response tokens. Let b index training sequences, t in-
+dex token positions, and Sq,b denote the prompt context
+for sequence b. For sequence b, define nb = P
+t mb,t and
+ωb = 1/√nb, where mb,t = 1 for valid target tokens and
+mb,t = 0 for prompt or padding tokens. The SFT objective
+LSFT = −
+t mb,tωb log pθ(yb,t | yb,<t, Hv,b, Sq,b)
+t mb,tωb
+(6)
+The denominator normalizes the weighted loss over all valid
+target tokens in the batch. Here, the normalization with
+ωb = 1/√nb reduces the dominance of long responses while
+preserving their greater amount of supervision.
+ParVL uses full-parameter SFT, so gradients from all
+active branches update the shared backbone parameters,
+while the prefixes and aggregation modules learn branch-
+specific conditioning and fusion. We vary Pv and Pl over
+{1, 2, 4}, covering balanced, vision-heavy, and language-
+heavy branch-count configurations. This allocation study ad-
+dresses two questions: whether parallel reuse improves the
+same-recipe single-branch baseline, and how the extra com-
+putation should be allocated between the vision and language
+components for each task.
+Because the branch-count configuration (Pv = 4, Pl = 4)
+entails more computation than 1:1, the accuracy difference
+between these configurations reflects both compute-scale
+and vision–language allocation effects. We therefore com-
+pare against the same-recipe single-branch baseline to as-
+sess expanded computation and report the FLOPs of each
+configuration when analyzing allocation. Since vision and
+language branches have different computational costs, these
+comparisons characterize empirical accuracy–cost trade-offs
+rather than isolate an allocation effect under exactly matched
+compute. Parameter and FLOP estimates for representative
+settings are reported in the supplement; across the evaluated
+configurations, total parameters increase by at most 4% over
+the corresponding single-branch baselines.
+Experiments
+Setup
+Data.
+Due to resource constraints, we use a 1/20 subsam-
+ple of the InternVL3.5 SFT collection, comprising approx-
+imately 13B tokens and 4.6M instances (Wang et al. 2025).
+All ParVL variants are initialized from the corresponding
+InternVL3.5 pretrained checkpoint and undergo one epoch
+of full-parameter SFT. Within each model scale, all con-
+trolled branch comparisons use the same data, optimization
+recipe, and pretrained checkpoint. Full training and data-
+composition details are provided in the supplement.
+Benchmarks.
+evaluate
+nine
+benchmarks.
+MMMUdev-val (Yue et al. 2024) assesses general mul-
+timodal
+reasoning.
+MathVistamini
+(Lu
+al.
+2024a),
+MathVisionmini (Wang et al. 2024), WeMath (Qiao et al.
+2025), and LogicVista (Xiao et al. 2024) evaluate mathemat-
+ical and logical reasoning. ChartQAtest (Masry et al. 2022),
+TextVQAval (Singh et al. 2019), DocVQAval (Mathew,
+Karatzas, and Jawahar 2021), and OCRBench (Liu et al.
+2023) assess chart, OCR, and document understanding. We
+report the MMMU score as General, average the four math-
+ematical and logical reasoning benchmarks as Math, and
+average the four OCR/document benchmarks as OCR. “All”
+is the equal-weight average of all nine benchmark scores.
+We use the same evaluation protocol for all experiments.
+Main Results
+Table 1 compares ParVL with public MLLMs and same-
+recipe single-branch baselines. At 1B, the configuration
+(Pv = 1, Pl = 4) raises the overall average from 49.6 for
+the single-branch baseline (Pv = 1, Pl = 1) to 50.3, while
+jointly expanding both components to 4:4 further raises it to
+50.5. At 2B and 8B, the 2:2 configuration raises the overall
+average from 54.4 to 54.7 and from 62.5 to 63.0, respectively.
+The same-recipe gains are therefore largest at 1B and smaller
+but positive at 2B and 8B. Public reference models provide
+additional context but use different training recipes.
+Across scales, the most consistent domain-level gains oc-
+cur in mathematical reasoning and OCR/document under-
+standing, while General is more sensitive to branch alloca-
+tion. As shown in Table 2, the best 1B configurations raise
+Math from 26.0 to 28.0 at 4:4 and OCR from 75.6 to 76.3
+at 2:4. General peaks at 41.1 under 2:2 but falls below its
+40.3 single-branch baseline under 1:4 and 4:4. At 2B, the
+evaluated 2:2 configuration improves Math and OCR by 0.3
+and 0.5, respectively, while General changes from 46.4 to
+46.1. At 8B, the same configuration improves General, Math,
+and OCR by 0.9, 0.8, and 0.1, respectively. Prior controlled
+studies of looped language models find that parameter count
+tracks factual knowledge capacity, whereas additional com-
+putation through parameter reuse improves knowledge ma-
+nipulation without increasing raw knowledge storage (Zhu
+et al. 2025b). ParVL similarly expands computation over
+
+Model
+General
+Math
+OCR
+Average
+MMMUdev-val
+MathVistamini
+MathVisionmini
+LogicVista WeMath ChartQAtest
+TextVQAval
+DocVQAval
+OCRBench
+General Math OCR
+All
+∼1B Models
+InternVL3.5-1B-Pretrained (Wang et al. 2025)
+38.0
+38.5
+16.8
+27.3
+12.9
+71.0
+67.8
+77.3
+70.5
+38.0
+23.9
+71.7
+46.7
+InternVL3.5-1B-Instruct (Wang et al. 2025)
+39.9
+50.7
+22.0
+32.0
+12.5
+77.2
+71.1
+84.0
+77.9
+39.9
+29.3
+77.6
+51.9
+Baseline (Pv = 1, Pl = 1)
+40.3
+43.9
+21.1
+27.3
+11.6
+71.7
+71.4
+82.6
+76.6
+40.3
+26.0
+75.6
+49.6
+ParVL-1B (Pv = 4, Pl = 1)
+39.7
+45.0
+22.4
+30.0
+11.3
+72.9
+71.5
+82.2
+75.5
+39.7
+27.2
+75.5
+50.1
+ParVL-1B (Pv = 1, Pl = 4)
+39.8
+44.5
+24.7
+29.5
+11.6
+72.1
+71.6
+82.4
+76.5
+39.8
+27.6
+75.7
+50.3
+ParVL-1B (Pv = 4, Pl = 4)
+39.0
+48.0
+22.4
+29.3
+12.3
+72.1
+71.9
+82.7
+77.0
+39.0
+28.0
+75.9
+50.5
+∼2B Models
+Ovis2-2B (Lu et al. 2024b)
+42.6
+64.5
+19.4
+33.6
+10.3
+81.3
+79.9
+91.6
+87.1
+42.6
+32.0
+85.0
+56.7
+Qwen3-VL-2B-Instruct (Bai et al. 2025)
+44.4
+54.2
+20.7
+31.8
+28.4
+77.7
+80.8
+93.0
+86.8
+44.4
+33.8
+84.6
+57.5
+InternVL3.5-2B-Pretrained (Wang et al. 2025)
+45.7
+50.3
+17.4
+30.9
+16.3
+77.8
+73.6
+85.4
+77.7
+45.7
+28.7
+78.6
+52.8
+InternVL3.5-2B-Instruct (Wang et al. 2025)
+49.9
+61.4
+25.0
+40.5
+19.9
+80.6
+76.1
+88.3
+82.9
+49.9
+36.7
+82.0
+58.3
+Baseline (Pv = 1, Pl = 1)
+46.4
+49.3
+19.7
+33.6
+18.4
+76.7
+76.0
+88.3
+81.5
+46.4
+30.3
+80.6
+54.4
+ParVL-2B (Pv = 2, Pl = 2)
+46.1
+53.6
+18.4
+31.8
+18.5
+78.0
+76.6
+88.1
+81.5
+46.1
+30.6
+81.1
+54.7
+∼8B Models
+Ovis2-8B (Lu et al. 2024b)
+56.4
+70.9
+26.3
+40.9
+27.6
+84.7
+83.3
+94.2
+89.1
+56.4
+41.4
+87.8
+63.7
+InternVL3-8B (Zhu et al. 2025a)
+57.8
+70.6
+26.0
+45.9
+31.3
+86.1
+82.2
+92.0
+88.1
+57.8
+43.4
+87.1
+64.4
+Qwen3-VL-8B-Instruct (Bai et al. 2025)
+61.2
+75.9
+37.5
+53.7
+50.3
+83.7
+83.8
+95.7
+90.1
+61.2
+54.4
+88.3
+70.2
+InternVL3.5-8B-Pretrained (Wang et al. 2025)
+56.1
+62.0
+24.0
+40.0
+33.1
+84.4
+78.5
+91.7
+80.8
+56.1
+39.8
+83.9
+61.2
+InternVL3.5-8B-Instruct (Wang et al. 2025)
+58.1
+70.8
+35.5
+48.1
+32.5
+86.3
+77.2
+91.7
+82.9
+58.1
+46.7
+84.5
+64.8
+Baseline (Pv = 1, Pl = 1)
+56.9
+63.2
+24.3
+42.1
+35.0
+85.4
+79.6
+93.1
+83.1
+56.9
+41.2
+85.3
+62.5
+ParVL-8B (Pv = 2, Pl = 2)
+57.8
+64.4
+26.6
+41.6
+35.2
+84.7
+80.3
+93.2
+83.4
+57.8
+42.0
+85.4
+63.0
+Table 1: Comparison of multimodal general, mathematical, and OCR performance. Within each model scale, the multi-
+branch ParVL variants are compared with a single-branch baseline (Pv = 1, Pl = 1) trained using the same SFT recipe; public
+models are shown for reference. Bold marks the best result among the displayed ParVL configurations of the same size. Pv and
+Pl denote the numbers of ViT and LLM branches, respectively.
+shared backbone parameters, which may favor tasks requir-
+ing visual evidence integration and intermediate reasoning
+over knowledge-intensive benchmarks such as MMMU. The
+8B result nevertheless shows that parallel scaling can also
+benefit broad-domain reasoning when the shared backbone
+has greater parameter capacity. Because all ParVL variants
+are trained on only 1/20 of the InternVL3.5 SFT collection,
+whether broader supervision strengthens the smaller-scale
+General results remains an open question.
+Ablation Results
+Prefix vs. LoRA.
+Figure 3 compares two implementations
+of vision-side parallelism. Prefix-conditioned attention dif-
+ferentiates parallel ViT branches using learned KV prefixes,
+whereas the LoRA variant assigns a branch-specific low-
+rank update to each parallel stream (Hu et al. 2022). Both
+implementations reuse the same ViT backbone under the
+same branch-count configuration (Pv = 4, Pl = 1) and a
+fixed 48-token language prefix. The comparison therefore
+isolates how new branch-specific parameters are introduced
+into the parallel vision streams. Across visual prefix lengths,
+72 tokens perform best on General (41.7) and OCR (75.8),
+whereas 128 tokens achieve the highest Math (27.6) and over-
+all (50.2) scores. We select 96 tokens as a reasoning-oriented,
+compute-aware compromise: it matches the 72-token over-
+all score of 50.1 while improving Math by 0.7, and remains
+within 0.1 overall and 0.4 Math of the 128-token setting while
+using 25% fewer visual prefix tokens.
+Among the LoRA variants, rank 16 gives the highest Gen-
+eral (41.3), OCR (75.7), and overall (49.8) scores. The best
+LoRA overall score remains 0.4 below the best prefix result,
+(a) MathVistamini
+
+43.9 45.8 45.0
+
+44.4 44.1 44.8
+
+44.5 44.0 48.0
+(b) LogicVista
+
+27.3 25.7 30.0
+
+28.2 26.8 27.5
+
+29.5 28.0 29.3
+(c) WeMath
+
+11.6 12.3 11.3
+
+11.7 10.1 11.5
+
+11.6 12.3 12.3
+(d) ChartQAtest
+
+71.7 72.9 72.9
+
+73.2 72.6 72.2
+
+72.1 74.0 72.1
+(e) TextVQAval
+
+71.4 71.4 71.5
+
+71.3 71.4 71.1
+
+71.6 71.8 71.9
+(f) OCRBench
+
+76.6 76.2 75.5
+
+75.2 76.0 76.0
+
+76.5 76.2 77.0
+(g) General
+
+40.3 39.9 39.7
+
+40.8 41.1 40.6
+
+39.8 39.1 39.0
+(h) Avg. Math
+
+26.0 26.4 27.2
+
+26.6 25.4 25.3
+
+27.6 26.3 28.0
+(i) Avg. OCR
+
+75.6 75.7 75.5
+
+75.5 75.6 75.5
+
+75.7 76.3 75.9
+Table 2: Ablation on branch-count configurations be-
+tween vision branches (Pv) and language branches (Pl).
+Darker cells indicate higher scores within each subtable.
+so we retain KV prefixes as ParVL’s default parameterization.
+
+40.0
+41.0
+42.0
+Score
+General
+26.0
+27.0
+28.0
+Math
+
+96 128
+
+75.2
+75.5
+75.8
+Score
+OCR
+Prefix Tokens
+LoRA Rank
+
+96 128
+
+49.5
+50.0
+All
+Prefix Tokens
+LoRA Rank
+Figure 3: Comparison of two mechanisms for parame-
+terizing parallel ViT branches in ParVL-1B under Pv =
+4, Pl = 1: branch-specific KV prefixes in prefix-conditioned
+attention and branch-specific LoRA modules. Prefix Tokens
+and LoRA Rank denote the KV-prefix length per ViT branch
+and the rank of each LoRA module, respectively. The lan-
+guage prefix remains fixed at 48 tokens (Chen et al. 2025).
+Vision/language allocation.
+Table 2 reports nine ParVL-
+1B branch-count configurations. Relative to the single-
+branch configuration (Pv = 1, Pl = 1), the best allocations
+raise General from 40.3 to 41.1 at 2:2, Math from 26.0 to
+28.0 at 4:4, and OCR from 75.6 to 76.3 at 2:4. The largest
+4:4 configuration therefore does not perform best in every
+domain: it trails the best observed score by 2.1 on General
+and 0.4 on OCR. Thus, the observed allocation preferences
+cannot be explained by total branch count alone.
+Allocation preferences also vary within the same domain.
+The complete heatmaps in the supplement show that Math-
+Vision favors the language-heavy 1:4 configuration, Log-
+icVista the vision-heavy 4:1 configuration, and MathVista
+the jointly expanded 4:4 configuration. These configura-
+tions improve upon 1:1 by 3.6, 2.7, and 4.1, respectively.
+OCR/document benchmarks likewise split between 2:4 for
+ChartQA and DocVQA and 4:4 for TextVQA and OCR-
+Bench. These results indicate that domain labels do not fully
+explain the observed allocation preferences and instead sug-
+gest a task-level interaction between visual evidence pro-
+cessing and language-side reasoning. The nine-benchmark
+average likewise shows that increasing one branch axis does
+not guarantee improvement: at Pl = 2, increasing Pv from
+1 to 2 or 4 reduces the score from 49.9 to 49.4 and 49.3,
+whereas increasing Pl to 4 recovers performance to 49.9 at
+2:4 and 50.5 at 4:4. Benchmark workload descriptors are also
+provided in the supplement.
+Inference Efficiency
+Sparse routing.
+Inspired by the top-1 sparse-routing prin-
+ciple in MoE models (Fedus, Zoph, and Shazeer 2022), Ta-
+ble 3 evaluates whether a checkpoint trained under Pv =
+4, Pl = 4 can be executed sparsely by activating only one
+ViT–LLM branch pair per sample. The learned router im-
+proves the overall average from 49.5 under random pair se-
+1.900
+1.925
+1.950
+1.975
+2.000
+2.025
+2.050
+2.075
+Latency / Sample (s)
+49.2
+49.5
+49.8
+50.0
+50.2
+50.5
+Avg. Score
+Latency
+2.3
+2.4
+2.5
+2.6
+2.7
+2.8
+2.9
+Peak GPU Memory (GB)
+49.2
+49.5
+49.8
+50.0
+50.2
+50.5
+Avg. Score
+Memory
+Pv =1
+Pv =2
+Pv =4
+Pl =1
+Pl =2
+Pl =4
+Figure 4: Performance–cost trade-offs at batch size = 1
+for inputs containing 768 image-context tokens and 256 text
+tokens per sample (1024 input tokens total); generation is
+fixed to 128 tokens. Labels denote Pv:Pl, colors Pv, and
+marker shapes Pl. Dashed lines trace the performance–cost
+frontier in each panel. The reported 4:1 configuration uses
+96 visual prefix tokens per branch.
+lection to 50.2, while dense 4:4 aggregation reaches 50.5.
+Relative to random selection, the gains are concentrated in
+Math (26.6 to 27.5) and OCR (75.1 to 75.8), while General
+remains unchanged at 38.8. The learned router therefore op-
+erates within 0.3 of dense aggregation while reducing the
+active configuration from 4:4 to 1:1. The supplementary ma-
+terial details the router architecture, training objective, and
+inference procedure, and analyzes the empirical Math and
+OCR preferences of individual branches.
+Latency and memory.
+We profile the ParVL-1B vari-
+ants with batch sizes {1, 2, 4, 8}. Each sample contains 768
+image-context tokens and 256 text tokens, with generation
+fixed to 128 tokens. After three untimed warm-up iterations
+to exclude one-time initialization overhead, we measure per-
+sample latency over ten timed iterations with CUDA syn-
+chronization and record peak allocated GPU memory; model
+loading and warm-up are excluded. The supplement details
+the input construction and memory protocol.
+ParVL exposes parallelism within each request, provid-
+ing additional hardware concurrency when opportunities for
+batching across requests are limited. Figure 4 presents the
+performance–cost trade-off at batch size 1. Dense 4:4 aggre-
+gation improves the overall score from 49.6 to 50.5 while
+
+Trained Pv:Pl
+Active Pv:Pl
+Policy
+General
+Math
+OCR
+All
+4:4
+1:1
+Random pair
+38.8
+26.6
+75.1
+49.5
+4:4
+1:1
+Learned router
+38.8
+27.5
+75.8
+50.2
+4:4
+4:4
+Aggregation
+39.0
+28.0
+75.9
+50.5
+Table 3: Exploration on sparse router module. All rows
+use the same checkpoint trained under Pv = 4, Pl = 4.
+Random pair and the learned router each activate one ViT–
+LLM branch pair per sample, whereas Aggregation activates
+all branches.
+Pv:Pl
+Shared KV
+Metric
+Batch Size
+
+4:4
+Latency
+1.04×
+1.09×
+1.12×
+1.22×
+Memory
+1.23×
+1.41×
+1.69×
+2.12×
+4:4
+Latency
+1.23×
+1.32×
+1.37×
+1.62×
+Memory
+1.11×
+1.18×
+1.30×
+1.47×
+Table 4: Relative inference costs. Per-sample latency and
+peak allocated GPU memory, normalized by standard 1:1 at
+each batch size. Both 4:4 variants are profiled sequentially
+on the same NVIDIA H200 GPU. Shared KV mean-reduces
+ordinary-token caches across LLM branches while retaining
+branch-specific prefix K/V.
+increasing per-sample latency and peak memory to 1.04×
+and 1.23× those of 1:1, respectively. The 1:4 configuration
+achieves 50.3 versus 50.5 for 4:4, with lower latency and
+peak memory. As shown in Table 4, the latency and memory
+ratios of standard 4:4 rise to 1.22× and 2.12×, respectively,
+as batch size increases from 1 to 8. The latency ratio grows
+more slowly than the memory ratio, consistent with con-
+current branch execution partially overlapping the additional
+computation while branch-specific activations and separate
+KV caches for the LLM branches scale with batch size.
+To reduce this memory growth, Shared KV retains branch-
+specific prefix K/V states while mean-reducing ordinary-
+token K/V states across the four LLM branches. As shown
+in Table 4, at batch size 8, it lowers the memory ratio rel-
+ative to standard 1:1 from 2.12× to 1.47×, but raises the
+latency ratio from 1.22× to 1.62×. Shared KV incurs only
+a small decrease in the nine-benchmark average, with de-
+tailed per-benchmark accuracy results provided in the sup-
+plement. Overall, within-request parallelism is most attrac-
+tive in low-concurrency settings, while Shared KV provides
+a memory–latency–accuracy trade-off as batching increases.
+The supplement provides implementation details, absolute
+measurements, and the full quality evaluation; all profiling
+results remain specific to this hardware and workload.
+Discussion and Limitations
+Relationship to Ensemble Methods.
+From another per-
+spective, ParVL can be viewed as an implicit ensemble
+of branch-wise next-token predictions (Jacobs et al. 1991;
+Shazeer et al. 2017; Du et al. 2022). Unlike conventional en-
+sembles of independently parameterized models, ParVL uses
+lightweight, branch-specific conditioning to differentiate rep-
+resentations produced by shared backbones. This preserves
+the parameter efficiency of a shared model while producing
+branch-conditioned representations; the additional computa-
+tion and memory are quantified in our efficiency analysis.
+Comparison with MoE Models and Upcycling.
+MoE
+models expand capacity through independently parameter-
+ized experts and sparse token routing; upcycling initializes
+expert parameters from a dense checkpoint before allowing
+them to specialize during joint routed training (Shazeer et al.
+2017; Fedus, Zoph, and Shazeer 2022; Li et al. 2024). ParVL
+instead keeps the ViT and LLM backbones shared and dif-
+ferentiates parallel streams through lightweight prefixes and
+aggregation modules, expanding computation with limited
+parameter growth. ParVL maintains a separate KV cache
+for each active LLM branch, whereas optional top-1 rout-
+ing reduces execution to one ViT–LLM branch pair. Thus,
+MoE upcycling expands stored expert capacity, while ParVL
+expands and allocates shared-backbone computation.
+Future Directions.
+ParVL currently expands parallel com-
+putation during SFT; extending parallel scaling to pretrain-
+ing could reveal how joint vision–language scaling behav-
+ior emerges (Chen et al. 2025). It is also complementary
+to token-efficient visual backbones based on adaptive token
+pruning or patch merging (Ye et al. 2025; Zhong et al. 2025;
+Shao et al. 2025; Kim et al. 2024), which may offset the cost
+of multi-branch computation.
+Limitations.
+We study only InternVL3.5 at 1B, 2B, and
+8B and supervised fine-tuning rather than pretraining. Re-
+source constraints limit training to a 1/20 subsample of
+the InternVL3.5 SFT collection with a single data mixture.
+Whether the modest gains at larger model scales partly reflect
+this restricted SFT budget remains to be tested through con-
+trolled data-scaling experiments. Validation across broader
+backbones, larger scales, and real deployment workloads re-
+mains future work.
+Conclusion
+In this paper, we introduce ParVL, a framework for parallel
+scaling that expands computation in MLLMs via parameter-
+shared, prefix-conditioned ViT and LLM branches. Con-
+trolled comparisons show that this parallel structure im-
+proves multimodal reasoning compared with same-recipe
+single-branch baselines while adding at most 4% additional
+parameters across the evaluated configurations. We further
+conduct the first systematic study of computation allocation
+between the vision encoder (Pv) and language decoder (Pl).
+Our experiments reveal that no single branch-count config-
+uration performs best across the evaluated tasks: reasoning
+performance benefits from expanding vision computation,
+language computation, or both, depending on task-specific
+multimodal requirements. These findings establish parallel
+scaling as a promising direction for improving MLLM rea-
+soning capabilities and motivate task-aware, flexible alloca-
+tion of computation between the two modalities.

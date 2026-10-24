@@ -38,6 +38,8 @@ class Scraper:
                 sources=sources,
                 max_results=max_results,
                 timeout=self.request_timeout,
+                retry_attempts=self.retry_attempts,
+                retry_delay=self.retry_delay,
             )
             if not papers:
                 logger.warning("No papers found from any source")

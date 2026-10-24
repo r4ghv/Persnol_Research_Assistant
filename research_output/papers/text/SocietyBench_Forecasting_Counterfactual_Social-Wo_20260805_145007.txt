@@ -1,0 +1,656 @@
+SocietyBench: Forecasting Counterfactual Social-World Evolution
+Zhenran Wang*
+Zhonghan Bian*
+Jinsong Li
+Zhangyang Qi
+Project page co-minder.github.io/Societybench
+Abstract
+Large language models (LLMs), and the agents built on top of them, are now benchmarked
+heavily on whether they can finish a task—fix a bug, drive a browser, operate a GUI. A com-
+plementary social ability, namely how well a model understands and forecasts the way real
+social events unfold, has barely been measured. We introduce SocietyBench, an end-to-end
+benchmark that takes a one-line event topic, collects Web news and social-media posts across
+five platforms, distills them into a date-indexed timeline that keeps factual events and a public-
+opinion layer separate, and then turns every cutoff date on that timeline into an audited bank
+of forecasting questions. Questions are scored on two orthogonal 100-point axes: probability
+calibration and temporal accuracy. Before any model sees a timeline, a three-phase procedure
+replaces every named entity and shifts every date by a per-event constant, turning a real arc
+into a counterfactual social world—structurally identical to what happened, but stripped of the
+surface labels a model could match against pre-training memory. On five heterogeneous events
+and 125 prediction points in Chinese and English editions, the strongest of six frontier LLMs
+reaches only 75.0 out of 100, against a trivial anchor of 50. The two axes come apart: a model
+can be calibration-strong but time-weak, or the reverse. Three agent frameworks built on a
+shared base model fail to improve on that base, and two model-free heuristics trail every LLM.
+Per-event gaps reach 21.4 points on a single axis, which is our main argument for evaluating on
+several events rather than one. All anonymized timelines, question banks, ground truth, and
+scoring code are released.
+1. Introduction
+The past two years produced a wave of LLM and agent benchmarks—SWE-bench, WebArena,
+OSWorld, 𝜏-bench and their successors—that all ask a version of the same question: can the
+model complete a task? That axis has matured. It also covers only one side of what these systems
+are used for. The complementary social side—how well a model understands and forecasts the
+dynamics of a real social event—has hardly been quantified at all, and whether current models
+can do it remains mostly a matter of anecdote.
+The benchmarks we have are not built to answer it. When a real, widely reported event is
+evaluated in its original form, a high score can reflect recognition of a memorized arc rather
+than genuine forecasting (Figure 1 contrasts the two regimes). Autocast (Zou et al., 2022) and
+ForecastBench (Karger et al., 2025) probe forecasting in a market-style, politico-economic setting,
+using a curated pool of expert-written “will 𝑋happen by 𝑌?” questions. They are rigorous
+*Equal contribution.
+Correspondence: qizhangyang2000@gmail.com, zhenran.w.1103@gmail.com
+  [cs.CL]  4 Aug 2026
+
+Figure 1 | Why SocietyBench evaluates counterfactual forecasting rather than event recall. Evaluated
+on a real, widely reported event in its original form, a model can score well simply by recognizing the
+event from pre-training data. SocietyBench replaces the entities and shifts the dates while preserving the
+causal and temporal structure, so the model has to forecast the future of an arc it cannot recognize.
+probability benchmarks, but three gaps keep them out of the regime we care about. First, the
+question types are narrow—nearly every item is a binary yes/no call. Second, contamination is
+avoided only by going live: live questions have to wait on an unresolved future, which forfeits
+completed arcs, while historical questions already sit in pre-training corpora. Third, public
+opinion is ignored—yet in a social event, narratives flip and sentiment swings faster than the
+underlying facts change.
+A second line of work is LLM-agent social simulation (Chuang et al., 2024; Man et al., 2025;
+Park et al., 2023; Piao et al., 2025; Yao et al., 2025a): populate a virtual town or forum with LLM
+agents playing personas, then watch the group behavior that emerges. These works ask whether
+an LLM can perform something that looks like a human society, not whether, given the opening
+of a real event, it can predict what happens next. The first question is about fidelity, the second
+about forecasting accuracy, and they are different tasks. Because a simulated environment
+has no real-world ground truth to score against, this line also cannot produce a quantitative
+leaderboard.
+We argue that a benchmark for this regime has to satisfy four demands at once. It must (a)
+work on real events and real multimedia data, so the distribution matches how these systems
+are actually used; (b) integrate both factual reporting and public sentiment, since either alone
+misses half the dynamics; (c) build its ground truth without expert hand-annotation, so new
+events can be added as they unfold; and (d) score models with calibrated metrics that reward
+uncertainty-aware predictions rather than accuracy-style hits. No existing benchmark meets all
+four. In particular (b) and (c) are in tension, because social-media opinion is notoriously hard to
+align with objective ground truth. Our main design observation is that the conjunction becomes
+feasible if the benchmark is framed as a retrospective forecasting exam on an already-finished
+event, with the second half of the timeline playing the role of ground truth.
+Concretely, we introduce SocietyBench, built on five heterogeneous social events spanning
+public controversy, geopolitics, technology policy, financial markets, and trade policy. For every
+event, an automated pipeline distills raw Web news and social-media posts into an anonymized,
+date-indexed timeline that separates factual events from a public-opinion layer, and then converts
+
+every cutoff into a battery of audited forecasting questions (Section 3). The joint anonymization
+is more than a leakage filter. By replacing every named entity and shifting every date by a
+per-event offset, it turns each real arc into a counterfactual social world: structurally identical to
+what really happened, but without the surface labels a model could match against memory.
+A score therefore reflects forward reasoning over social-world evolution rather than recall of the
+specific real arc the timeline came from.
+Our contributions:
+• We release SocietyBench, a reproducible end-to-end benchmark for LLM and agent
+forecasting of real social events: five heterogeneous domains, dual-source timelines (Web
+news plus five social-media platforms), and a fully automated construction pipeline.
+• We design a benchmarking protocol that pairs input-side three-phase entity-and-date
+anonymization with output-side dual-axis scoring—probability calibration and temporal
+accuracy—on calibrated 100-point metrics.
+• We evaluate 6 frontier LLMs, 3 agent frameworks, and 2 non-LLM baselines end-to-end
+on 125 prediction points in two language editions. The strongest LLM reaches only 75.0
+out of 100; the two axes dissociate; and per-event gaps reach 21.4 points on a single axis,
+which makes single-event evaluation unreliable.
+2. Related Work
+Task-completion agent benchmarks.
+Most existing LLM and agent benchmarks target the task-
+completion axis: SWE-bench (Jimenez et al., 2024) resolves real GitHub issues, WebArena (Zhou
+et al., 2024) runs long-horizon web tasks across four self-hosted apps, OSWorld (Xie et al., 2024)
+covers multi-application desktop workflows, 𝜏-bench (Yao et al., 2025b) tests policy-bound
+dialogue agents, and GAIA (Mialon et al., 2024) poses general-assistant questions requiring tool
+use. All ask whether an agent can execute a prescribed sequence of operations to reach a known
+end state. SocietyBench is the social-dimension counterpart: instead of asking whether an agent
+can complete a task whose solution is fixed, we ask whether it can predict how a real-world
+social event will unfold.
+Event and sentiment forecasting benchmarks.
+A separate line poses questions that can only
+be verified once events play out. Autocast (Zou et al., 2022), retrieval-augmented forecast-
+ing (Halawi et al., 2024), and ForecastBench (Karger et al., 2025) attach probability questions
+to dated news corpora. Context-Aware Sentiment Forecasting (Man et al., 2025) narrows to
+user-sentiment evolution during social-media events. MIRAI (Ye et al., 2024) forecasts country-
+level geopolitical events from a news database, and FutureX (Zeng et al., 2025) maintains a
+daily-refreshed live-web leaderboard. PolyBench (Cheng et al., 2026) is the only prior work
+that scores time-of-event error in days, but it does so on Polymarket short-horizon contracts.
+SocietyBench differs by targeting medium-to-long-horizon social arcs that carry both a factual and a
+public-opinion layer, rather than short-horizon binary contracts.
+LLM-driven social simulation.
+A different line asks the inverse question: rather than predicting
+an event, can we generate a plausible society? Generative Agents (Park et al., 2023) first showed
+believable sandbox dynamics; AgentSociety (Piao et al., 2025) and OASIS (Yang et al., 2024)
+scaled the idea to tens of thousands and then a million agents; Opinion Dynamics (Chuang et al.,
+2024) and FDE-LLM (Yao et al., 2025a) study how opinions propagate through such networks. A
+
+Figure 2 | SocietyBench methodology. Each retrospective cutoff 𝑑𝑃splits the anonymized timeline into a
+visible context 𝐶𝑃and a held-out set 𝐺𝑃. An audited bank emits a calibration set 𝑄cal
+and a temporal set
+𝑄time
+, scored on two independent 100-point axes.
+more recent cluster—SocioVerse (Zhang et al., 2025), MF-LLM (Mi et al., 2025), DualMind (Huang
+et al., 2026)—moves toward predictive validation, checking whether a simulated population’s
+aggregate trajectory matches a real one. These target aggregate simulator fidelity rather than
+per-event forecast accuracy. The latter question—given a real unfolding social arc, can an LLM
+or agent system forecast it?—is what SocietyBench measures.
+3. Methodology
+3.1. Task Formulation
+The model plays a forecaster sitting at a cutoff date 𝑑𝑃. It sees everything that happened before
+𝑑𝑃—the context 𝐶𝑃—and nothing after. It also cannot tell which real event it is looking at, because
+every named entity has been replaced and every date shifted (Section 3.2). It is then asked two
+kinds of questions about what happens after 𝑑𝑃(Figure 2). Together these form a prediction point
+𝑃=  𝑑𝑃, 𝐶𝑃, 𝐺𝑃, 𝑄cal
+𝑃, 𝑄time
+where the ground-truth set 𝐺𝑃is simply the timeline nodes from 𝑑𝑃onward.
+• A calibration question 𝑞= (𝐸𝑞, 𝑑𝑞,𝑊𝑞) asks whether event 𝐸𝑞occurs within the window
+[𝑑𝑞−𝑊𝑞, 𝑑𝑞]. The model returns a probability ˆ𝑝𝑞∈[0, 1] and is scored against the binary
+ground truth 𝑦𝑞∈{0, 1}.
+• A temporal question asks for the calendar date ˆ𝑑𝑒of a future event 𝑒in 𝐺𝑃. Error is
+measured in days.
+Performance is summarized on two orthogonal axes—probability calibration and temporal
+accuracy—each converted to a 100-point score per event; full definitions are in Section 3.3. Every
+event is evaluated independently, and a bare LLM and a full agent system are run under exactly
+the same protocol.
+
+Event
+Nodes
+Cal. questions
+per point
+Temporal events
+in 0–90 d window
+Wuhan Library
+
+2,862
+114.5
+
+US-Iran
+
+4,574
+183.0
+
+TikTok
+
+6,697
+267.9
+
+SMCI
+
+3,196
+127.8
+
+Trump Tariff
+
+8,035
+321.4
+
+Total
+
+25,364
+202.9
+3,112
+2,776
+Table 1 | Per-event bank statistics, per language edition; the two editions are one-to-one. Nodes is the
+timeline depth, and in-window counts the temporal events falling 0–90 d after their cutoff, which is the
+subset the temporal axis consumes. Every event contributes 𝑁𝑃= 25 prediction points.
+3.2. Dataset and Anonymization
+The benchmark covers five real events drawn from five domains—public controversy, geopolitical
+conflict, technology policy, financial markets, and trade policy—each spanning at least four weeks, so
+that the post-cutoff window admits a non-trivial horizon: a university library harassment dispute
+(“Wuhan Library”), a U.S.–Iran conflict (“US-Iran”), a U.S. TikTok divestiture/ban ruling (“TikTok”),
+a Super Micro NASDAQ delisting crisis (“SMCI”), and a U.S. reciprocal-tariff escalation (“Trump
+Tariff”).
+Each event is processed independently by the same pipeline, which produces a fact + opinion
+merged timeline, a per-event entity-and-date replacement table, an accepted set of prediction
+points, and a question bank for each prediction point. The pipeline runs automatically end to
+end; released artifacts additionally pass human acceptance audits, which gate quality but do not
+hand-author labels. After processing, timeline depth ranges from 39 to 168 nodes, with 𝑁𝑃= 25
+prediction points per event. Per language edition, calibration questions range from 2,862 on
+Wuhan Library to 8,035 on Trump Tariff, and declared temporal events from 503 on US-Iran to 976
+on Trump Tariff. Table 1 gives the per-event breakdown.
+Anonymization.
+Frontier LLMs may have memorized a raw event—from its named entities
+down to the absolute calendar position of its arc—so each merged timeline is anonymized before
+any model sees it, obscuring named entities and dates jointly. Each event carries its own entity
+replacement table R and a single date offset 𝛿∼U[−𝛿max, +𝛿max] applied uniformly to every
+date, which destroys absolute calendar position while leaving all inter-date gaps intact. We
+set 𝛿max = 180 d: a window that large crosses two seasons and a full quarterly reporting cycle,
+which defeats exact temporal lookup, while still keeping seasonal references coherent after the
+shift.
+Two checks bound what memorization can still buy. First, recalling the true calendar cannot
+pay by construction: re-scoring a model’s own predictions as if it had answered on the real
+calendar collapses the temporal score to the same floor that an oracle knowing the true calendar
+attains against the shifted ground truth. Second, restoring real names and real dates outright
+moves the calibration axis by only +1.0 point on average, so binary outcome judgment does not
+lean on memorized identities. The three anonymization steps, summarized in Algorithm 1, are:
+• A Substitution. Replace entity strings via R using longest-match lookup, and shift every
+date by 𝛿; a final scan repairs doubled substitutions.
+• B Reverse-identification audit. A panel of three adversarial LLMs independently re-reads
+the anonymized text and tries to recover the original event and time period, reporting
+
+Algorithm 1 Three-phase anonymization.
+Require: Raw timeline Traw, replacement table R, date offset 𝛿, maximum audit rounds 𝐾= 5
+Ensure: Anonymized timeline Tanon, or event rejection
+1: T (0) ←replace entities in Traw by longest-match lookup in R
+2: Shift every date in T (0) by the same offset 𝛿
+3: Repair doubled substitutions and malformed date mentions
+4: for 𝑘= 1 to 𝐾do
+Ask the adversarial auditor panel to identify the original event and time window
+Let 𝑔𝑘∈{H I G H, M I D, L O W} be the strongest auditor confidence
+if 𝑔𝑘= L O W then
+break
+else if 𝑔𝑘= M I D then
+10:
+Augment R and/or resample 𝛿to remove residual clues
+11:
+Re-apply substitution and date shifting
+12:
+else
+13:
+return reject event
+14:
+end if
+15: end for
+16: Run paragraph-, event-, and narrative-level semantic-consistency checks
+17: Repair any substitution damage while preserving anonymized entities and shifted dates
+18: return Tanon
+confidence in {H I G H, M I D, L O W}. H I G H means the auditor named the specific event;
+M I D means it named the event class; L O W means it was wrong. The augment-and-rerun
+loop follows Algorithm 1: an event is only released once no auditor still returns H I G H.
+• C Semantic-consistency pass. Compare against the original at paragraph, event, and
+narrative level, repairing any damage introduced by substitution.
+As argued in Section 1, the result is a counterfactual social world that a model cannot match
+against pre-training memory.
+Bilingual release.
+Each event’s question bank is released in Chinese and English in one-to-one
+correspondence. Both editions share the same entity placeholders and the same shifted dates, so
+neither edition can be used to de-anonymize the other.
+3.3. Evaluation Protocol
+Every model receives a calibration score 𝑆cal and a temporal score 𝑆time, both on a 0–100
+higher-is-better scale.
+Calibration score.
+Each calibration question 𝑞carries a weight 𝑤𝑞= 𝑤time
+· 𝑤win
+, the product
+of two factors:
+• Time factor 𝑤time
+= 1/(1 + 𝛼· Δ𝑡𝑞) with 𝛼= 0.04. The further a question resolves from the
+cutoff, in days Δ𝑡𝑞, the lower its weight, because far-future questions are noisier.
+• Window factor 𝑤win
+= 𝑊𝑞/(𝑊𝑞+ 4). The shorter the question window 𝑊𝑞, the lower the
+weight, because very short windows admit only trivial predictions.
+
+The weighted mean absolute error is then converted to a 100-point score:
+wMAEcal =
+𝑞𝑤𝑞| ˆ𝑝𝑞−𝑦𝑞|
+𝑞𝑤𝑞
+𝑆cal = 100 · max 0, 1 −wMAEcal
+(1)
+A predictor that answers 50% to everything scores exactly 50, which anchors the scale. The
+choice of rule is not load-bearing: the scoring ablation of Section 4.3 re-scores every answer
+under proper scoring rules (Brier, log-loss) and the model ordering survives both.
+Temporal score.
+For every ground-truth event 𝑒the model predicts a date ˆ𝑑𝑒, with error
+Δ𝑒= | ˆ𝑑𝑒−𝑑GT
+| in days. Each event falls in one of three 30-day buckets [ℓ𝑒, 𝑢𝑒]—days 0–30, 31–60,
+or 61–90 after the cutoff—according to its offset 𝑡𝑒; day 0 is the cutoff date, which the context
+strictly precedes. A band of radius Δ𝑒centered on the true date, clipped to the bucket, gives the
+normalized miss:
+𝐵𝑒= min(𝑢𝑒, 𝑡𝑒+ Δ𝑒) −max(ℓ𝑒, 𝑡𝑒−Δ𝑒),
+𝑚𝑒= min 1, 𝐵𝑒/30.
+(2)
+Reusing the same time factor:
+𝑆time = 100 · max
+0, 1 −
+𝑒𝑤time
+𝑒𝑤time
+(3)
+A guesser that always answers the midpoint of its bucket scores roughly 50, so the two axes
+share a common trivial anchor.
+Aggregation.
+Equation (1) and Equation (3) are computed independently on each event, giving
+a per-event pair (𝑆cal, 𝑆time). A model’s headline score is the cross-event mean of the five per-event
+scores, and per-event scorecards are reported alongside it.
+4. Experiments
+4.1. Implementation Details
+We evaluate six frontier, API-accessible LLMs—GPT-5.5, Gemini-3.5-Flash, Claude-Opus-4.8,
+DeepSeek-V4-Pro, Kimi-K2.5, and Doubao-Seed-2.0-Pro—together with three agent baselines built
+on the Doubao base model: LangGraph (LangChain Team, 2024) (plan-and-solve), AutoGen (Wu
+et al., 2024) (multi-agent debate), and MiroFish (Guo, 2026), a third-party open-source social-
+simulation forecaster built on OASIS (Yang et al., 2024). All systems are evaluated on the five
+events of Section 3.2, in both the Chinese and English editions.
+All systems are queried deterministically (temperature 0) under a fixed reasoning budget,
+with the reasoning trace captured. No system is granted external web search beyond what
+its framework requires internally. Each system answers both question banks once at every
+prediction point. A question that still lacks a parseable answer after three retries is excluded
+from the primary score rather than silently defaulted, so no filled value reaches Table 2. The
+released materials cover the anonymized timelines, the question banks, and the ground truth;
+per-question model responses are not part of the release.
+
+• Wuhan Lib. • US-Iran
+• TikTok
+• SMCI
+• Trump Tariff
+Avg.
+System
+Cal. Time
+Cal. Time Cal. Time Cal. Time Cal. Time
+Cal. Time Overall
+GPT-5.5
+74.7
+55.6
+66.3
+63.2
+78.7
+84.4
+74.9
+84.2
+81.7
+85.4
+75.3
+74.6
+75.0
+Gemini-3.5-Flash
+71.0
+59.6
+68.9
+58.5
+79.8
+79.4
+72.3
+73.3
+77.8
+66.1
+73.9
+67.3
+70.6
+Claude-Opus-4.8
+59.0
+63.2
+55.0
+62.3
+64.2
+72.6
+60.8
+70.4
+73.6
+81.7
+62.5
+70.0
+66.3
+DeepSeek-V4-Pro
+63.4
+58.6
+55.9
+64.9
+65.1
+66.7
+60.8
+65.2
+67.5
+69.0
+62.5
+64.9
+63.7
+Kimi-K2.5
+64.4
+59.4
+58.4
+65.6
+62.5
+63.9
+64.8
+64.9
+66.4
+64.0
+63.3
+63.6
+63.4
+Doubao-Seed-2.0-Pro 65.5
+58.3
+57.9
+60.3
+67.0
+64.2
+60.5
+65.0
+70.3
+65.0
+64.3
+62.6
+63.4
+Table 2 | Main leaderboard. Per-event and cross-event calibration / temporal means for six frontier
+LLMs; each cell averages the Chinese and English editions. A uniform 50% predictor scores exactly 50 on
+the calibration axis, and a bucket-midpoint guesser scores about 50 on the temporal axis.
+Figure 3 | Per-event scores. Mean is the six-LLM average on each axis.
+4.2. Main Results
+Table 2 reports the main leaderboard, with per-event scorecards on the left (visualized in Figure 3)
+and the cross-event mean on the right; every cell averages the two language editions.
+Two findings stand out.
+The spread is wide at the top and tight at the bottom. GPT-5.5 leads at 75.0, followed by
+Gemini-3.5-Flash at 70.6 and Claude-Opus-4.8 at 66.3, while the bottom three sit within 63.4–63.7
+of one another—an 11.3-point lead (+17.7%) over that cluster. The lead is not an artifact of one
+lucky event: leaving any single event out and re-averaging still leaves GPT-5.5 ahead by at least
+2.4 points, and it wins outright on four of the five events.
+The two axes come apart. GPT-5.5 leads both (75.3 calibration / 74.6 temporal), but Gemini-
+3.5-Flash is calibration-strong and time-weak (73.9 vs. 67.3) while Claude-Opus-4.8 is the mirror
+image (62.5 vs. 70.0). Neither axis is a proxy for the other, which is the practical reason we
+report both rather than a single blended number. Even the leader recovers only about half the
+headroom above the trivial anchor of 50, so the benchmark is far from saturated.
+Stress-case events.
+Two events stand out as stress cases (Table 3; Figure 4 traces both qualita-
+tively). On Trump Tariff, Kimi-K2.5 scores lowest on both axes (66.4 / 64.0) and the temporal gap
+to GPT-5.5 reaches 21.4 points (+33%)—the largest single-event, single-axis gap in the whole
+table—on the very event where most models post their best calibration scores. On SMCI the
+
+Event statistics
+Mean
+GPT-5.5
+Kimi-K2.5
+Gap Δ
+Event
+Arc
+#Cal.
+#Time
+Cal.
+Time
+Cal.
+Time
+Cal.
+Time
+Cal.
+Time
+S M C I
+
+468d
+3,196
+
+65.7
+70.5
+74.9
+84.2
+64.8
+64.9
+10.116% 19.330%
+T R U M P -TA R I F F
+
+2,930d
+8,035
+
+72.9
+71.9
+81.7
+85.4
+66.4
+64.0
+15.323% 21.433%
+Table 3 | Stress-case comparison. GPT-5.5 (strongest overall) versus Kimi-K2.5 (weakest on the temporal
+axis); Mean is the six-LLM mean; Gap Δ is GPT minus Kimi, with subscripts giving the gap as a percentage
+of Kimi’s score. Arc is the span covered by the event’s prediction points, and #Time counts declared
+events (only those 0–90 d after a cutoff are scored).
+Figure 4 | Qualitative model comparison. The S M C I extension decision (left) and the tariff decision
+(right), GPT-5.5 (✓) versus Kimi-K2.5 (×). GPT commits to a calibrated probability and lands close to the
+true date; Kimi under-commits and anchors far away.
+same GPT–Kimi gap is double-digit on both axes (+10.1 / +19.3), which is consistent with an
+event built around company-specific numerical disclosures that reward precise uncertainty
+handling. The practical implication is the one we flag in Section 1: a benchmark of this kind
+reports a much noisier picture if it is run on a single event—two of our five events would each,
+on their own, tell a materially different story about how far apart the models are.
+4.3. Ablation Study
+We ablate four design choices: question-bank composition, the calibration scoring formula,
+true/false composition, and cutoff position.
+Question-bank composition.
+Table 4 drops one subset of the bank at a time and re-scores. The
+four audited types are: A, does the same event occur within windows growing from 7 to 90
+days; B, one fact re-asked at rising levels of detail; C, true outcomes paired with counterfactual
+variants; D, events built to be false. Dropping A inflates the six-LLM mean the most (+7.2), so
+A carries most of the benchmark’s difficulty. It targets a specific failure: models over-bet on a
+currently hot narrative continuing in the near term, which is exactly what a growing-window
+question probes. Dropping D moves the mean the other way (−3.4), making it the easiest
+subset—models are good at rejecting invented events. B and C shift the mean by at most 0.8, so
+
+Question-bank composition
+Doubao GPT
+Mean
+−A-type (time-gradient, 47%)
+70.7+6.4
+83.4+8.1
+74.2+7.2
+−B-type (specificity, 23%)
+62.9−1.4
+74.1−1.2 66.2−0.8
+−C-type (variants, 12%)
+63.9−0.4
+74.8−0.5 66.6−0.4
+−D-type (designed-false, 18%)
+62.1−2.2
+72.2−3.1 63.6−3.4
+Full bankCal. (ours, ∼25k Q/ed.)
+64.3
+75.3
+67.0
+−Near events (0–30 d, 52%)
+62.0−0.5
+78.0+3.4
+67.7+0.5
+−Mid events (31–60 d, 29%)
+62.8+0.3
+74.4−0.2 67.4+0.2
+−Far events (61–90 d, 18%)
+62.5−0.1
+73.5−1.1 66.8−0.4
+Full bankTime (ours, ∼3.1k ev./ed.) 62.6
+74.6
+67.2
+Table 4 | Question-bank composition. The upper
+block drops a question type, the lower block a hori-
+zon bucket (shares rounded); subscripts are relative to
+the full bank.
+Calibration scoring formula
+Doubao GPT
+Gap
+Equal weights (𝑤=1)
+64.2−0.1
+74.2−1.1
+10.0
+Linear time-decay (1−𝑑/365)
+65.4+1.1
+76.0+0.7
+10.6
+No time-decay (𝛼=0)
+64.8+0.5
+75.0−0.3
+10.2
+Steeper decay (𝛼=0.08)
+63.8−0.5
+75.1−0.2
+11.3
+Steeper decay (𝛼=0.16)
+63.1−1.2
+75.0−0.3
+11.9
+Brier score (rescaled)
+57.4−6.9
+70.8−4.5
+13.4
+Log-loss (rescaled)
+45.4−18.9 65.0−10.3 19.6
+Hyperbolic score mapping
+73.4+9.1
+80.1+4.8
+6.7
+Weighted MAE (ours, 𝛼=0.04) 64.3
+75.3
+11.0
+Table 5 | Calibration scoring formula. Alter-
+native weights, metrics, and mappings; Gap is
+GPT minus Doubao.
+True/false Q’s Doubao DSeek Opus Gemini GPT Mean (6)
+True
+59.8
+49.3
+46.4
+72.0
+73.5
+60.3
+False
+71.6
+79.9
+84.3
+76.6
+78.3
+76.1
+Bias
++11.8
++30.6
++38.0
++4.7
++4.8
++15.9
+Table 6 | True/false-question bias (calibration
+axis). Models deny false events better than they
+confirm true ones; Bias is false minus true.
+Cutoff position Doubao
+Opus
+Gemini
+GPT
+Mean (6)
+Early
+63.4
+62.7
+75.1
+75.5
+66.7
+Middle
+66.1+2.7 63.5+0.8 73.6−1.5 75.4−0.1
+67.6+0.9
+Late
+66.6+0.5 68.4+4.9 69.6−4.0 77.4+2.0
+68.7+1.1
+Gradient
++3.2
++5.7
+−5.5
++1.9
++2.0
+Table 7 | Cutoff gradient (calibration axis). Later
+prediction points see more history and score higher;
+Gradient is late minus early.
+neither changes the ranking on its own. On the temporal side, dropping any horizon bucket
+moves the mean by at most 0.5, so that axis is robust to the horizon mix.
+Calibration scoring formula.
+Table 5 re-scores the same answers under eight alternative
+calibration rules. Removing the time decay, steepening it, or dropping the question weights
+altogether moves scores by at most 1.2 points, so the score is insensitive to the exact weighting.
+Replacing MAE with Brier or log-loss deflates Doubao by 6.9 and 18.9 points respectively; a
+hyperbolic mapping inflates both models and shrinks their gap to 6.7. Under every rule the
+GPT–Doubao gap stays positive, so the ranking does not depend on the choice of rule. And
+against the suspicion that a designer picks the metric that flatters the result: the proper scoring
+rules (Brier, log-loss) widen the gap rather than narrowing it, because they punish confident
+errors harder and weaker models make more of them. Our weighted MAE is the gentler choice.
+We keep it because it sits in the middle of the score range while up-weighting the near-cutoff
+questions, where forecasting is hardest, and down-weighting trivially short windows.
+True/false-question bias.
+Table 6 splits the calibration bank by answer: events that did occur,
+versus the false variants of types A–C and the designed-false D set. Models are much better
+at denying false events than at confirming true ones—six-LLM means of 76.1 against 60.3, and a
+mean per-model bias of +15.9. This is a disposition, not raw strength. The two leaders are near
+balanced (GPT-5.5 +4.8, Gemini-3.5-Flash +4.7); Claude-Opus-4.8 is the extreme at +38.0, very
+good at rejecting what did not happen and poor at endorsing what did. A different true/false
+ratio would reward that disposition, so we keep the bank near 1:1—the axis should measure
+forecasting, not default skepticism.

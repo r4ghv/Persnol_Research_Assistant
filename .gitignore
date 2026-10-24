@@ -55,3 +55,8 @@ dist/
 *.egg-info/
 
 
+###############################
+# Runtime data (regenerated on demand)
+###############################
+workspace/
+.vector_store/

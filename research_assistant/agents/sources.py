@@ -1,3 +1,4 @@
+import time
 import arxiv as arxiv_client
 import requests
 import re
@@ -7,6 +8,7 @@ from typing import List, Dict, Optional
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
+
 
 PAPER_SCHEMA = [
     "title", "authors", "abstract", "published", "pdf_url",
@@ -36,37 +38,57 @@ class PaperSource(ABC):
 class ArxivSource(PaperSource):
     name = "arXiv"
 
+    def __init__(
+        self, retry_attempts: int = 3, retry_delay: float = 3.0
+    ):
+        self.retry_attempts = retry_attempts
+        self.retry_delay = retry_delay
+
     def search(self, query: str, max_results: int) -> List[Dict]:
-        try:
-            clean = _clean_query(query)
-            logger.info(f"Searching arXiv for: '{clean}'")
-            search = arxiv_client.Search(
-                query=clean,
-                max_results=max_results,
-                sort_by=arxiv_client.SortCriterion.SubmittedDate,
-            )
-            papers = []
-            for r in arxiv_client.Client().results(search):
-                papers.append({
-                    "title": r.title,
-                    "authors": [a.name for a in r.authors],
-                    "abstract": r.summary,
-                    "published": str(r.published),
-                    "pdf_url": r.pdf_url,
-                    "doi": r.doi or None,
-                    "source": self.name,
-                    "source_id": r.entry_id.split("/")[-1],
-                    "citation_count": None,
-                    "url": r.entry_id,
-                    "entry_id": r.entry_id,
-                })
-                if len(papers) >= max_results:
-                    break
-            logger.info(f"arXiv found {len(papers)} papers")
-            return papers
-        except Exception as e:
-            logger.error(f"arXiv search error: {e}")
-            return []
+        clean = _clean_query(query)
+        client = arxiv_client.Client()
+        # arXiv rate-limits aggressively (HTTP 429); retry with backoff.
+        for attempt in range(1, self.retry_attempts + 1):
+            try:
+                logger.info(f"Searching arXiv for: '{clean}'")
+                search = arxiv_client.Search(
+                    query=clean,
+                    max_results=max_results,
+                    sort_by=arxiv_client.SortCriterion.SubmittedDate,
+                )
+                papers = []
+                for r in client.results(search):
+                    papers.append({
+                        "title": r.title,
+                        "authors": [a.name for a in r.authors],
+                        "abstract": r.summary,
+                        "published": str(r.published),
+                        "pdf_url": r.pdf_url,
+                        "doi": r.doi or None,
+                        "source": self.name,
+                        "source_id": r.entry_id.split("/")[-1],
+                        "citation_count": None,
+                        "url": r.entry_id,
+                        "entry_id": r.entry_id,
+                    })
+                    if len(papers) >= max_results:
+                        break
+                logger.info(f"arXiv found {len(papers)} papers")
+                return papers
+            except Exception as e:
+                message = str(e)
+                is_rate_limit = "429" in message or "Too Many" in message
+                if attempt < self.retry_attempts and is_rate_limit:
+                    delay = self.retry_delay * attempt
+                    logger.warning(
+                        f"arXiv rate-limited (attempt {attempt}/{self.retry_attempts}); "
+                        f"retrying in {delay:.0f}s: {e}"
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error(f"arXiv search error: {e}")
+                    return []
+        return []
 
 
 class PubMedSource(PaperSource):

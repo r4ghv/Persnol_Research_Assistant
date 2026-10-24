@@ -13,6 +13,7 @@ class Config:
         # Directory configurations
         self.BASE_DIR = Path(__file__).parent.parent.parent
         self.OUTPUT_DIR = self.BASE_DIR / "research_output"
+        self.WORKSPACE_DIR = self.BASE_DIR / os.getenv("WORKSPACE_DIR", "workspace")
         
         # API configurations
         self.OPENAI_API_KEY = self._get_env_var("OPENAI_API_KEY")
@@ -23,10 +24,21 @@ class Config:
         self.MAX_PAPERS = int(os.getenv("MAX_PAPERS", 5))
         self.MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", 10))
         
+        # API / network settings
+        self.API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+        self.API_TIMEOUT = int(os.getenv("API_TIMEOUT", 600))
+        
         # Network settings
         self.REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 30))
-        self.RETRY_ATTEMPTS = int(os.getenv("RETRY_ATTEMPTS", 3))
-        self.RETRY_DELAY = float(os.getenv("RETRY_DELAY", 2.0))
+        
+        # Vector store settings
+        self.EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+        self.CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", ".vector_store")
+        self.CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "research_papers")
+        
+        # RAG settings
+        self.RAG_MODEL = os.getenv("RAG_MODEL", "gpt-4o-mini")
+        self.RAG_TOP_K = int(os.getenv("RAG_TOP_K", 5))
         
         # Initialize directories
         self._init_directories()

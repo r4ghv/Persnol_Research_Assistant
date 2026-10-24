@@ -117,6 +117,8 @@ def search_all_sources(
     sources: List[str],
     max_results: int = 5,
     timeout: int = 30,
+    retry_attempts: int = 3,
+    retry_delay: float = 3.0,
 ) -> List[Dict]:
     from .sources import ArxivSource, PubMedSource, SemanticScholarSource
 
@@ -133,7 +135,10 @@ def search_all_sources(
         cls = source_map.get(name)
         if cls is None:
             continue
-        instance = cls(timeout=timeout) if name != "arXiv" else cls()
+        if name == "arXiv":
+            instance = cls(retry_attempts=retry_attempts, retry_delay=retry_delay)
+        else:
+            instance = cls(timeout=timeout)
         try:
             results = instance.search(query, per_source)
             all_papers.extend(results)
